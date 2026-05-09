@@ -2,7 +2,7 @@
   "name": "ankiLinker",
   "author": "imiacc",
   "url": "https://github.com/imiacc/siyuan-ankiLinker",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "minAppVersion": "2.10.14",
   "disabledInPublish": false,
   "backends": [
@@ -38,4 +38,5 @@
     "riff"
   ]
 }
+
 

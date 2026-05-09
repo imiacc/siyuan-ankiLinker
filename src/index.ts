@@ -8,6 +8,13 @@ import { destroy, init, showPanel } from '@/main'
 import topbarIcon from '@/../asset/topbar-icon.svg?raw'
 
 const TOPBAR_ICON_NAME = 'iconAnkiLinker'
+const SETTINGS_STORAGE_KEY = 'settings.json'
+const MAPPINGS_STORAGE_KEY = 'mappings.json'
+const LEGACY_STORAGE_KEY = 'ankilinker-state.json'
+
+type CardUpdateOptions = {
+  cards?: unknown[]
+}
 
 let PluginInfo = {
   version: '',
@@ -62,7 +69,7 @@ export default class AnkiLinkerPlugin extends Plugin {
     console.log('ankiLinker loaded, the plugin is ', this)
   }
 
-  updateCards(options) {
+  updateCards(options: CardUpdateOptions) {
     window._sy_ankilinker = {
       ...(window._sy_ankilinker || {}),
       cards: options.cards,
@@ -72,10 +79,26 @@ export default class AnkiLinkerPlugin extends Plugin {
 
   onunload() {
     destroy()
+    cleanupRuntimeState()
+  }
+
+  async uninstall() {
+    await Promise.allSettled([
+      this.removeData(SETTINGS_STORAGE_KEY),
+      this.removeData(MAPPINGS_STORAGE_KEY),
+      this.removeData(LEGACY_STORAGE_KEY),
+    ])
+    cleanupRuntimeState()
   }
 
   openSetting() {
     showPanel()
+  }
+}
+
+function cleanupRuntimeState() {
+  if (window._sy_ankilinker) {
+    delete window._sy_ankilinker
   }
 }
 
@@ -84,5 +107,6 @@ function extractSvgBody(svg: string) {
     .replace(/^[\s\S]*?<svg[^>]*>/i, '')
     .replace(/<\/svg>\s*$/i, '')
 }
+
 
 

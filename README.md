@@ -4,7 +4,7 @@ SiYuan flashcard sync plugin for local Anki.
 
 - Author: `imiacc`
 - Repository: <https://github.com/imiacc/siyuan-ankiLinker>
-- Current version: `0.1.0`
+- Current version: `0.1.1`
 
 ## Sync architecture
 
@@ -117,6 +117,16 @@ This helps avoid errors like:
 11. Review added / updated / deleted / invalid items
 12. Run sync
 13. If needed, return to Anki and perform its normal sync
+
+## Uninstall cleanup
+
+When the plugin is fully uninstalled, it removes its own persisted SiYuan plugin data files, including:
+
+- `settings.json`
+- `mappings.json`
+- legacy `ankilinker-state.json`
+
+This cleanup only happens during full uninstall, not on normal disable, reload, or update, so your settings will not be accidentally lost during routine development or upgrades.
 
 ## Build
 

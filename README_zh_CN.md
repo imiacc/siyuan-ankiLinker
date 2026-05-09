@@ -6,7 +6,7 @@
 
 - 作者：`imiacc`
 - 仓库：<https://github.com/imiacc/siyuan-ankiLinker>
-- 当前版本：`0.1.0`
+- 当前版本：`0.1.1`
 
 ## 功能
 
@@ -152,6 +152,19 @@
 
 - Markdown / KaTeX 渲染类插件
 - 兼容你字段结构的自定义 Note Type
+
+## 卸载清理说明
+
+插件完整卸载时，会清理自己在思源插件数据目录下创建的持久化文件，包括：
+
+- `settings.json`
+- `mappings.json`
+- 旧版遗留 `ankilinker-state.json`
+
+注意：
+
+- 只有“完整卸载”才会执行这部分清理
+- 普通禁用、重载、升级不会删除你的配置，避免误丢数据
 
 ## 构建
 
