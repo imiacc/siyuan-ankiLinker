@@ -147,7 +147,51 @@ export async function getIDsByHPath(
   return request(url, data);
 }
 
-// **************************************** Asset Files ****************************************
+export async function listDocsByPath(
+  notebook: NotebookId,
+  path: string
+): Promise<any[]> {
+  let data = {
+    notebook: notebook,
+    path: path,
+  };
+  let url = "/api/filetree/listDocsByPath";
+  let result = await request(url, data);
+  return Array.isArray(result?.files) ? result.files : [];
+}
+
+export async function getRiffCards(): Promise<any> {
+
+
+  let url = "/api/riff/getRiffCards";
+  return request(url, {});
+}
+
+export async function getRiffDueCards(): Promise<any> {
+  let url = "/api/riff/getRiffDueCards";
+  return request(url, {});
+}
+
+export async function reviewRiffCard(data: any) {
+  let url = "/api/riff/reviewRiffCard";
+  return request(url, data);
+}
+
+export async function addRiffCards(data: any) {
+  let url = "/api/riff/addRiffCards";
+  return request(url, data);
+}
+
+export async function removeRiffCards(data: any) {
+  let url = "/api/riff/removeRiffCards";
+  return request(url, data);
+}
+
+export async function batchSetRiffCardsDueTime(data: any) {
+  let url = "/api/riff/batchSetRiffCardsDueTime";
+  return request(url, data);
+}
+
 
 export async function upload(
   assetsDirPath: string,

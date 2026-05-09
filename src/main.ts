@@ -1,37 +1,50 @@
 import {
   Plugin,
-} from "siyuan";
+} from 'siyuan'
 import { createApp } from 'vue'
 import App from './App.vue'
 
-let plugin = null
+let plugin: Plugin | null = null
 export function usePlugin(pluginProps?: Plugin): Plugin {
-  console.log('usePlugin', pluginProps, plugin)
   if (pluginProps) {
     plugin = pluginProps
   }
   if (!plugin && !pluginProps) {
-    console.error('need bind plugin')
+    throw new Error('need bind plugin')
   }
-  return plugin;
+  return plugin as Plugin
 }
 
+let app: ReturnType<typeof createApp> | null = null
+let rootElement: HTMLDivElement | null = null
 
-let app = null
-export function init(plugin: Plugin) {
-  // bind plugin hook
-  usePlugin(plugin);
+export function init(pluginProps: Plugin) {
+  usePlugin(pluginProps)
 
   const div = document.createElement('div')
-  div.classList.toggle('plugin-sample-vite-vue-app')
-  div.id = this.name
+  div.classList.add('anki-linker-app', 'fn__none')
+  div.id = 'anki-linker-app'
   app = createApp(App)
   app.mount(div)
   document.body.appendChild(div)
+  rootElement = div
+}
+
+export function showPanel() {
+  rootElement?.classList.remove('fn__none')
+}
+
+export function hidePanel() {
+  rootElement?.classList.add('fn__none')
 }
 
 export function destroy() {
-  app.unmount()
-  const div = document.getElementById(this.name)
-  document.body.removeChild(div)
+  if (app) {
+    app.unmount()
+    app = null
+  }
+  if (rootElement?.parentNode) {
+    rootElement.parentNode.removeChild(rootElement)
+  }
+  rootElement = null
 }

@@ -1,8 +1,8 @@
 {
-  "name": "plugin-sample-vite-vue",
+  "name": "ankiLinker",
   "version": "0.0.1",
   "type": "module",
-  "description": "This is a sample plugin based on vite and vue for Siyuan (https://b3log.org/siyuan)",
+  "description": "A Siyuan plugin for syncing flashcards to Anki",
   "author": "",
   "license": "MIT",
   "homepage": "",

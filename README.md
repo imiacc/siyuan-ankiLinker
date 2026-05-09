@@ -1,147 +1,135 @@
-# Siyuan Plugin Template - Vite & Vue3
+# ankiLinker
 
-[简体中文](./README_zh_CN.md)
+SiYuan flashcard sync plugin for local Anki.
 
-> Consistent with [siyuan/plugin-sample](https://github.com/siyuan-note/plugin-sample).
+## Sync architecture
 
-1. Use Vite for packaging
-2. Use Vue3 for development
-3. Provides a github action template to automatically generate package.zip and upload to new release
-4. Provides a script to auto create tag and release. [link](#release-script)
+This plugin uses the following path:
 
-> [!NOTE]
->
-> Before your start, you need install [NodeJS](https://nodejs.org/en/download) and [pnpm](https://pnpm.io/installation) first.
+- SiYuan plugin → local `AnkiConnect` → local `Anki Desktop`
+- Then `Anki Desktop` performs its own normal sync to your Anki account/server
 
-> [!WARNING]
->
-> For your first attempt, please do not modify anything. Load the plugin template in Siyuan as described below before making any changes.
->
-> For example, deleting README_zh_CN.md will also cause the plugin to fail to load.
+Requirements:
 
-## Get started
+1. `Anki Desktop` must be running
+2. `Anki Desktop` must be logged in if you want cloud sync
+3. `AnkiConnect` must be installed and enabled
+4. This plugin talks to a local URL such as `http://127.0.0.1:8765`
 
-1. Use the `Use the template` button to make a copy of this repo as template.  
-> [!WARNING]
->
-> That the repository name should match the plugin name, and the default branch must be `main`.
+## Features
 
+- Uses SiYuan flashcard `cardID` as stable sync identity
+- Manual sync from SiYuan to local Anki
+- Incremental add / update / delete
+- Separate note type selection for QA cards and Cloze cards
+- Automatically reads field names from the selected Anki note type and lets you choose them from dropdowns
+- Supports routing cards to different Anki decks based on SiYuan document path prefixes
+- Sync preview, logs, and local mapping persistence
 
-2. Use `git clone` to clone the copied repo to your computer.
-3. Use `pnpm i` to install the dependencies.
+## Supported card parsing
 
-4. Copy the `.env.example` file as `.env`, set the `VITE_SIYUAN_WORKSPACE_PATH` to your SiYuan workspace.
+### QA cards
 
+Supported formats:
 
-> [!TIP]
->
-> If you prefer not to package the project directly into the workspace, you can use a `symbolic link` instead.
->
-> Writing directly into the Siyuan workspace allows you to sync via Siyuan's sync feature to other devices, while using a symbolic link will not be included in the sync.
->
-> This template does not provide specific details about symbolic links. For related information, please refer to [plugin-sample-vite-svelte](https://github.com/siyuan-note/plugin-sample-vite-svelte).
+- A single block split by `---` or `***`
+- Parent/super block QA: first child block is front, remaining child blocks are back
 
-5. Use `pnpm dev` to run the project, you will see info like below
+### Cloze cards
 
-  ```
+Use SiYuan highlight syntax:
 
-  > plugin-sample-vite-vue@0.0.1 dev /path/to/your/plugin-sample-vite-vue
-  > vite build --watch
-
-  mode=> production
-  env=> {
-    VITE_SIYUAN_WORKSPACE_PATH: '/path/to/siyuan/workspace',
-    VITE_DEV_DIST_DIR: ''
-  }
-
-  Siyuan workspace path is set:
-  /path/to/siyuan/workspace
-
-  Plugin will build to:
-  # ✅ the plugin will build into here
-  /path/to/siyuan/workspace/data/plugins/plugin-sample-vite-vue
-
-  isWatch=> true
-  distDir=> /path/to/siyuan/workspace/data/plugins/plugin-sample-vite-vue
-  vite v6.3.5 building for production...
-
-  watching for file changes...
-
-  build started...
-  ✓ 26 modules transformed.
-  rendering chunks (1)...LiveReload enabled
-  ../../Siyuan-plugin/data/plugins/plugin-sample-vite-vue/index.css    1.08 kB │ gzip:  0.41 kB
-  ../../Siyuan-plugin/data/plugins/plugin-sample-vite-vue/index.js   198.60 kB │ gzip: 46.59 kB
-  [vite-plugin-static-copy] Copied 7 items.
-  built in 502ms.
-  ```
-
-
-   If successed, restart your siyuan, and you will find the plugin in `Siyuan - Settings - Marketplace`, named as `plugin-sample-vite-vue`.
-6. Enable the plugin, and check the `App.vue` file to start your development.
-   
-   This file contains some example codes.
-
-
-> [!TIP]
->
-> More plugin code examples, please check [siyuan/plugin-sample/src/index.ts](https://github.com/siyuan-note/plugin-sample/blob/main/src/index.ts)
-
-
-
-## List on the Marketplace
-
-### Use Github Action
-
-1. You can create a new tag, use your new version number as the `Tag version` in your local.
-2. Then push the tag to Github. The Github Action will create a new Release for you.
-
-> [!TIP]
->
-> <div id="release-script"></div>This template provided a script to auto create tag and release. You can use `pnpm release` to create a patch version.
->
-> You can add `--mode=manual|patch|minor|major` arg to set release mode, or run with arg like `pnpm release:manual`. 
-> 
-> All the scripts please see the `package.json` file.
-
-The github action is included in this sample, you can use it to publish your new realse to marketplace automatically:
-
-1. In your repo setting page `https://github.com/OWNER/REPO/settings/actions`, down to Workflow Permissions and open the configuration like this:
-
-![img](./asset/action.png)
-
-2. Push a tag in the format `v*` and github will automatically create a new release with new bulit package.zip
-3. By default, it will only publish a pre-release, if you don't think this is necessary, change the settings in release.yml
-
-```yaml
-- name: Release
-    uses: ncipollo/release-action@v1
-    with.
-        allowUpdates: true
-        artifactErrorsFailBuild: true
-        artifacts: 'package.zip'
-        token: ${{ secrets.GITHUB_TOKEN }}
-        prerelease: true # change this to false
+```md README.md
+The closest planet to the sun is ==Mercury==.
 ```
 
-### Manual
+It becomes:
 
-1. Use `pnpm build` to generate `package.zip`
-2. Create a new Github release using your new version number as the "Tag version". See here for an example: https://github.com/siyuan-note/plugin-sample/releases
-3. Upload the file package.zip as binary attachments
-4. Publish the release
-
-> [!NOTE]
-> If it is the first release, please create a pull request to the [Community Bazaar](https://github.com/siyuan-note/bazaar) repository and modify the plugins.json file in it. This file is the index of all community plugin repositories, the format is:
-
-```json
-{
-  "repos": [
-    "username/reponame"
-  ]
-}
+```text README.md
+The closest planet to the sun is {{c1::Mercury}}.
 ```
 
----
+## Sync direction and deletion behavior
 
-More other plugin info, please check in [siyuan/plugin-sample](https://github.com/siyuan-note/plugin-sample).
+### SiYuan → Anki
+
+This plugin is **one-way sync**:
+
+- If a flashcard is added in SiYuan, a note is created in Anki
+- If a flashcard is changed in SiYuan, the mapped Anki note is updated
+- If a flashcard disappears from SiYuan, the mapped Anki note is deleted
+
+### Anki → SiYuan
+
+No reverse writing is performed:
+
+- Editing an Anki note does not update SiYuan content
+- Deleting an Anki note does not delete SiYuan blocks
+- If the SiYuan flashcard still exists, the plugin may recreate or remap it on the next sync
+
+## Deck routing by path
+
+The plugin reads each flashcard's SiYuan document path (`hPath`) and matches it against your configured path rules.
+
+Example:
+
+- `/English/Vocabulary` → `English::Vocab`
+- `/Math/Linear Algebra` → `Math::LinearAlgebra`
+
+Matching logic:
+
+- first matching `startsWith` rule wins
+- if no rule matches, the default deck is used
+
+## Template and field selection
+
+The plugin no longer assumes that:
+
+- QA fields are always `Front / Back`
+- Cloze fields are always `Text / Extra`
+
+Instead it:
+
+1. reads the selected Anki note type
+2. fetches its field list
+3. lets you pick the fields from dropdowns
+
+This helps avoid errors like:
+
+- `cannot create note because it is empty`
+
+## Usage
+
+1. Start local `Anki Desktop`
+2. Ensure `AnkiConnect` is installed and enabled
+3. Open the plugin panel
+4. Detect local connection
+5. Refresh decks/models
+6. Choose the default deck
+7. Choose QA and Cloze note types
+8. Choose the target fields from dropdowns
+9. Optionally add path-prefix-to-deck rules
+10. Generate sync preview
+11. Review added / updated / deleted / invalid items
+12. Run sync
+13. If needed, return to Anki and perform its normal sync
+
+## Build
+
+Install dependencies:
+
+```powershell README.md
+D:\Environment\nodejs22\npm.cmd install
+```
+
+Build:
+
+```powershell README.md
+D:\Environment\nodejs22\npx.cmd vite build
+```
+
+Generated output:
+
+- `dist/`
+- `package.zip`
+

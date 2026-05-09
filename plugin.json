@@ -1,7 +1,7 @@
 {
-  "name": "plugin-sample-vite-vue",
-  "author": "wetoria",
-  "url": "https://github.com/Wetoria/plugin-sample-vite-vue",
+  "name": "ankiLinker",
+  "author": "",
+  "url": "",
   "version": "0.0.1",
   "minAppVersion": "2.10.14",
   "disabledInPublish": true,
@@ -12,14 +12,14 @@
     "all"
   ],
   "displayName": {
-    "default": "plugin-sample-vite-vue",
-    "en_US": "plugin-sample-vite-vue",
-    "zh_CN": "plugin-sample-vite-vue"
+    "default": "ankiLinker",
+    "en_US": "ankiLinker",
+    "zh_CN": "ankiLinker"
   },
   "description": {
-    "default": "plugin-sample-vite-vue",
-    "en_US": "plugin-sample-vite-vue",
-    "zh_CN": "plugin-sample-vite-vue"
+    "default": "Siyuan flashcard to Anki sync plugin",
+    "en_US": "Siyuan flashcard to Anki sync plugin",
+    "zh_CN": "思源闪卡同步 Anki 插件"
   },
   "readme": {
     "default": "README.md",

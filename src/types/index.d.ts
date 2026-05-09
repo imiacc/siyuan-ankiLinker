@@ -122,10 +122,13 @@ interface Window {
     ws: any;
     languages: any;
   };
-  _sy_plugin_sample: {
+  _sy_ankilinker: {
+    cards?: any[];
+    closePanel?: () => void;
     [key: string]: any;
   };
 }
+
 
 
 enum SyFrontendTypes {

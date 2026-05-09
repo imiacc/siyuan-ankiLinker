@@ -8,6 +8,11 @@
 </template>
 
 <script setup lang="ts">
+defineOptions({
+  inheritAttrs: false,
+})
+
 defineProps(['modelValue'])
 defineEmits(['update:modelValue'])
 </script>
+
