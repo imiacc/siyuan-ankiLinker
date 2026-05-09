@@ -1,6 +1,10 @@
-# ankiLinker
+# siyuan-ankiLinker
 
 SiYuan flashcard sync plugin for local Anki.
+
+- Author: `imiacc`
+- Repository: <https://github.com/imiacc/siyuan-ankiLinker>
+- Current version: `0.1.0`
 
 ## Sync architecture
 

@@ -1,8 +1,12 @@
-# ankiLinker
+# siyuan-ankiLinker
 
 [English](./README.md)
 
 思源笔记闪卡同步 Anki 插件。
+
+- 作者：`imiacc`
+- 仓库：<https://github.com/imiacc/siyuan-ankiLinker>
+- 当前版本：`0.1.0`
 
 ## 功能
 

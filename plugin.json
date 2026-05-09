@@ -1,10 +1,10 @@
 {
   "name": "ankiLinker",
-  "author": "",
-  "url": "",
-  "version": "0.0.1",
+  "author": "imiacc",
+  "url": "https://github.com/imiacc/siyuan-ankiLinker",
+  "version": "0.1.0",
   "minAppVersion": "2.10.14",
-  "disabledInPublish": true,
+  "disabledInPublish": false,
   "backends": [
     "all"
   ],
@@ -12,14 +12,14 @@
     "all"
   ],
   "displayName": {
-    "default": "ankiLinker",
-    "en_US": "ankiLinker",
-    "zh_CN": "ankiLinker"
+    "default": "Anki Linker",
+    "en_US": "Anki Linker",
+    "zh_CN": "Anki 闪卡同步"
   },
   "description": {
-    "default": "Siyuan flashcard to Anki sync plugin",
-    "en_US": "Siyuan flashcard to Anki sync plugin",
-    "zh_CN": "思源闪卡同步 Anki 插件"
+    "default": "Sync SiYuan flashcards to local Anki via AnkiConnect",
+    "en_US": "Sync SiYuan flashcards to local Anki via AnkiConnect",
+    "zh_CN": "通过 AnkiConnect 将思源闪卡同步到本地 Anki"
   },
   "readme": {
     "default": "README.md",
@@ -29,5 +29,13 @@
   "funding": {
     "custom": []
   },
-  "keywords": []
+  "keywords": [
+    "siyuan",
+    "anki",
+    "ankiconnect",
+    "flashcard",
+    "sync",
+    "riff"
+  ]
 }
+

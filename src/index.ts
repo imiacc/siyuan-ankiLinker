@@ -5,6 +5,9 @@ import {
 import "@/index.scss";
 import PluginInfoString from '@/../plugin.json'
 import { destroy, init, showPanel } from '@/main'
+import topbarIcon from '@/../asset/topbar-icon.svg?raw'
+
+const TOPBAR_ICON_NAME = 'iconAnkiLinker'
 
 let PluginInfo = {
   version: '',
@@ -43,11 +46,13 @@ export default class AnkiLinkerPlugin extends Plugin {
       this.isElectron = false
     }
 
+    this.addIcons(`<symbol id="${TOPBAR_ICON_NAME}" viewBox="0 0 16 16">${extractSvgBody(topbarIcon)}</symbol>`)
+
     init(this)
 
     this.addTopBar({
-      icon: 'iconRiffCard',
-      title: 'ankiLinker',
+      icon: TOPBAR_ICON_NAME,
+      title: 'Anki Linker',
       position: 'right',
       callback: () => {
         showPanel()
@@ -57,7 +62,7 @@ export default class AnkiLinkerPlugin extends Plugin {
     console.log('ankiLinker loaded, the plugin is ', this)
   }
 
-    updateCards(options) {
+  updateCards(options) {
     window._sy_ankilinker = {
       ...(window._sy_ankilinker || {}),
       cards: options.cards,
@@ -69,9 +74,15 @@ export default class AnkiLinkerPlugin extends Plugin {
     destroy()
   }
 
-
   openSetting() {
     showPanel()
   }
 }
+
+function extractSvgBody(svg: string) {
+  return svg
+    .replace(/^[\s\S]*?<svg[^>]*>/i, '')
+    .replace(/<\/svg>\s*$/i, '')
+}
+
 

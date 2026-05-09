@@ -44,7 +44,7 @@ export default defineConfig(({
   console.log("distDir=>", distDir)
 
   return {
-    resolve: {
+        resolve: {
       alias: {
         "@": resolve(__dirname, "src"),
       },
@@ -71,6 +71,10 @@ export default defineConfig(({
             dest: "./",
           },
           {
+            src: "./asset/topbar-icon.svg",
+            dest: "./asset",
+          },
+          {
             src: "./src/i18n/**",
             dest: "./i18n/",
           },
@@ -79,6 +83,7 @@ export default defineConfig(({
     ],
 
     // https://github.com/vitejs/vite/issues/1930
+
     // https://vitejs.dev/guide/env-and-mode.html#env-files
     // https://github.com/vitejs/vite/discussions/3058#discussioncomment-2115319
     // 在这里自定义变量

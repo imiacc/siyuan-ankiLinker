@@ -1,12 +1,26 @@
 {
-  "name": "ankiLinker",
-  "version": "0.0.1",
+  "name": "siyuan-ankiLinker",
+  "version": "0.1.0",
   "type": "module",
-  "description": "A Siyuan plugin for syncing flashcards to Anki",
-  "author": "",
+  "description": "Sync SiYuan flashcards to local Anki via AnkiConnect",
+  "author": "imiacc",
   "license": "MIT",
-  "homepage": "",
-  "repository": "",
+  "homepage": "https://github.com/imiacc/siyuan-ankiLinker",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/imiacc/siyuan-ankiLinker.git"
+  },
+  "bugs": {
+    "url": "https://github.com/imiacc/siyuan-ankiLinker/issues"
+  },
+  "keywords": [
+    "siyuan",
+    "anki",
+    "ankiconnect",
+    "flashcard",
+    "sync",
+    "riff"
+  ],
   "scripts": {
     "dev": "vite build --watch",
     "release": "node ./release.js",
@@ -40,3 +54,4 @@
     "vite-plugin-zip-pack": "^1.0.5"
   }
 }
+
