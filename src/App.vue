@@ -1,10 +1,10 @@
 <template>
-  <div class="anki-linker-app-shell">
-    <div class="anki-linker-shell">
+  <div class="siyuan-anki-linker-app-shell">
+    <div class="siyuan-anki-linker-shell">
       <header class="hero">
         <div>
           <p class="eyebrow">SiYuan to Local Anki</p>
-          <h1>ankiLinker</h1>
+          <h1>siyuan-ankiLinker</h1>
           <p class="desc">绑定思源原生闪卡 cardID，通过本地 AnkiConnect 同步到已登录你服务器的 Anki 桌面端。</p>
         </div>
         <div class="hero-actions">
@@ -213,6 +213,7 @@ type PathSearchState = {
   basePath: string
 }
 
+const PLUGIN_RUNTIME_KEY = '_sy_siyuan_ankiLinker'
 const SETTINGS_STORAGE_KEY = 'settings.json'
 const MAPPINGS_STORAGE_KEY = 'mappings.json'
 const LEGACY_STORAGE_KEY = 'ankilinker-state.json'
@@ -693,7 +694,7 @@ watch(() => settings.qaNoteType, async () => { await refreshModelFields() })
 watch(() => settings.clozeNoteType, async () => { await refreshModelFields() })
 
 onMounted(async () => {
-  window._sy_ankilinker = { closePanel }
+  window[PLUGIN_RUNTIME_KEY] = { closePanel }
   await loadState()
   await refreshCardStats()
   await refreshRemoteMeta()
@@ -702,7 +703,7 @@ onMounted(async () => {
 </script>
 
 <style lang="scss">
-.anki-linker-app-shell {
+.siyuan-anki-linker-app-shell {
   width: 100%;
   height: 100dvh;
   overflow-y: auto;
@@ -711,7 +712,7 @@ onMounted(async () => {
   padding: 16px 0;
 }
 
-.anki-linker-shell {
+.siyuan-anki-linker-shell {
   width: min(1100px, calc(100vw - 32px));
   min-height: min-content;
   margin: 0 auto;
@@ -937,7 +938,7 @@ onMounted(async () => {
 }
 
 @media (max-width: 768px) {
-  .anki-linker-shell {
+  .siyuan-anki-linker-shell {
     width: calc(100vw - 20px);
   }
 

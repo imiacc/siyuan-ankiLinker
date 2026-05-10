@@ -1,6 +1,8 @@
 /* eslint-disable node/prefer-global/process */
 import { resolve } from "node:path"
+import { rmSync } from "node:fs"
 import vue from "@vitejs/plugin-vue"
+
 import fg from "fast-glob"
 import minimist from "minimist"
 import livereload from "rollup-plugin-livereload"
@@ -52,7 +54,7 @@ export default defineConfig(({
 
     plugins: [
       vue(),
-      viteStaticCopy({
+            viteStaticCopy({
         targets: [
           {
             src: "./README*.md",
@@ -74,12 +76,9 @@ export default defineConfig(({
             src: "./asset/topbar-icon.svg",
             dest: "./asset",
           },
-          {
-            src: "./src/i18n/**",
-            dest: "./i18n/",
-          },
         ],
       }),
+
     ],
 
     // https://github.com/vitejs/vite/issues/1930
@@ -122,11 +121,11 @@ export default defineConfig(({
                   // 监听静态资源文件
                   name: "watch-external",
                   async buildStart() {
-                    const files = await fg([
-                      "src/i18n/*.json",
+                                        const files = await fg([
                       "./README*.md",
                       "./plugin.json",
                     ])
+
                     for (const file of files) {
                       this.addWatchFile(file)
                     }
@@ -134,11 +133,18 @@ export default defineConfig(({
                 },
               ]
             : [
-                zipPack({
+                                zipPack({
                   inDir: "./dist",
                   outDir: "./",
                   outFileName: "package.zip",
                 }),
+                {
+                  name: "cleanup-empty-i18n-dir",
+                  closeBundle() {
+                    rmSync(resolve(__dirname, "dist/i18n"), { recursive: true, force: true })
+                  },
+                },
+
               ]),
         ],
 

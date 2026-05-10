@@ -122,12 +122,13 @@ interface Window {
     ws: any;
     languages: any;
   };
-  _sy_ankilinker: {
+  _sy_siyuan_ankiLinker: {
     cards?: any[];
     closePanel?: () => void;
     [key: string]: any;
   };
 }
+
 
 
 

@@ -5,14 +5,19 @@ import {
 import "@/index.scss";
 import PluginInfoString from '@/../plugin.json'
 import { destroy, init, showPanel } from '@/main'
+import { getFile, removeFile } from '@/api'
 import topbarIcon from '@/../asset/topbar-icon.svg?raw'
 
-const TOPBAR_ICON_NAME = 'iconAnkiLinker'
+const TOPBAR_ICON_NAME = 'iconSiyuanAnkiLinker'
+const LEGACY_PLUGIN_ID = 'ankiLinker'
+const PLUGIN_RUNTIME_KEY = '_sy_siyuan_ankiLinker'
 const SETTINGS_STORAGE_KEY = 'settings.json'
 const MAPPINGS_STORAGE_KEY = 'mappings.json'
 const LEGACY_STORAGE_KEY = 'ankilinker-state.json'
+const STORAGE_KEYS = [SETTINGS_STORAGE_KEY, MAPPINGS_STORAGE_KEY, LEGACY_STORAGE_KEY] as const
 
 type CardUpdateOptions = {
+
   cards?: unknown[]
 }
 
@@ -21,14 +26,15 @@ let PluginInfo = {
 }
 try {
   PluginInfo = PluginInfoString
-} catch (err) {
-  console.log('Plugin info parse error: ', err)
+} catch {
+  // ignore plugin info parse fallback
 }
+
 const {
   version,
 } = PluginInfo
 
-export default class AnkiLinkerPlugin extends Plugin {
+export default class SiyuanAnkiLinkerPlugin extends Plugin {
   public isMobile: boolean
   public isBrowser: boolean
   public isLocal: boolean
@@ -49,7 +55,7 @@ export default class AnkiLinkerPlugin extends Plugin {
       require('@electron/remote')
         .require('@electron/remote/main')
       this.isElectron = true
-    } catch (err) {
+    } catch {
       this.isElectron = false
     }
 
@@ -59,21 +65,22 @@ export default class AnkiLinkerPlugin extends Plugin {
 
     this.addTopBar({
       icon: TOPBAR_ICON_NAME,
-      title: 'Anki Linker',
+      title: 'siyuan-ankiLinker',
       position: 'right',
       callback: () => {
         showPanel()
       },
     })
 
-    console.log('ankiLinker loaded, the plugin is ', this)
+    await migrateLegacyStorageIfNeeded(this)
   }
 
   updateCards(options: CardUpdateOptions) {
-    window._sy_ankilinker = {
-      ...(window._sy_ankilinker || {}),
+    window[PLUGIN_RUNTIME_KEY] = {
+      ...(window[PLUGIN_RUNTIME_KEY] || {}),
       cards: options.cards,
     }
+
     return options
   }
 
@@ -84,9 +91,8 @@ export default class AnkiLinkerPlugin extends Plugin {
 
   async uninstall() {
     await Promise.allSettled([
-      this.removeData(SETTINGS_STORAGE_KEY),
-      this.removeData(MAPPINGS_STORAGE_KEY),
-      this.removeData(LEGACY_STORAGE_KEY),
+      ...STORAGE_KEYS.map(key => this.removeData(key)),
+      ...STORAGE_KEYS.map(key => removeFile(buildLegacyStoragePath(key))),
     ])
     cleanupRuntimeState()
   }
@@ -97,13 +103,79 @@ export default class AnkiLinkerPlugin extends Plugin {
 }
 
 function cleanupRuntimeState() {
-  if (window._sy_ankilinker) {
-    delete window._sy_ankilinker
+
+  if (window[PLUGIN_RUNTIME_KEY]) {
+    delete window[PLUGIN_RUNTIME_KEY]
   }
+}
+
+function buildLegacyStoragePath(filename: string) {
+  return `/data/storage/petal/${LEGACY_PLUGIN_ID}/${filename}`
+}
+
+async function migrateLegacyStorageIfNeeded(plugin: Plugin) {
+  try {
+    const existingSettings = await plugin.loadData(SETTINGS_STORAGE_KEY)
+    const existingMappings = await plugin.loadData(MAPPINGS_STORAGE_KEY)
+    const existingLegacyState = await plugin.loadData(LEGACY_STORAGE_KEY)
+    if (existingSettings || existingMappings || existingLegacyState) {
+      return
+    }
+
+    const [legacySettingsRaw, legacyMappingsRaw, legacyStateRaw] = await Promise.all([
+      getFile(buildLegacyStoragePath(SETTINGS_STORAGE_KEY)),
+      getFile(buildLegacyStoragePath(MAPPINGS_STORAGE_KEY)),
+      getFile(buildLegacyStoragePath(LEGACY_STORAGE_KEY)),
+    ])
+
+    const legacySettings = parseLegacyStorageContent(legacySettingsRaw)
+    const legacyMappings = parseLegacyStorageContent(legacyMappingsRaw)
+    const legacyState = parseLegacyStorageContent(legacyStateRaw)
+
+    const writeTasks: Promise<void>[] = []
+    if (legacySettings) {
+      writeTasks.push(plugin.saveData(SETTINGS_STORAGE_KEY, legacySettings))
+    }
+    if (legacyMappings) {
+      writeTasks.push(plugin.saveData(MAPPINGS_STORAGE_KEY, legacyMappings))
+    }
+    if (legacyState) {
+      writeTasks.push(plugin.saveData(LEGACY_STORAGE_KEY, legacyState))
+    }
+
+    if (writeTasks.length === 0) {
+      return
+    }
+
+        await Promise.all(writeTasks)
+
+  } catch {
+    // ignore legacy migration failures
+  }
+}
+
+function parseLegacyStorageContent(raw: unknown) {
+
+  if (raw == null) {
+    return null
+  }
+  if (typeof raw === 'string') {
+    const text = raw.trim()
+    if (!text) {
+      return null
+    }
+    try {
+      return JSON.parse(text)
+    } catch {
+      return raw
+    }
+  }
+  return raw
 }
 
 function extractSvgBody(svg: string) {
   return svg
+
     .replace(/^[\s\S]*?<svg[^>]*>/i, '')
     .replace(/<\/svg>\s*$/i, '')
 }

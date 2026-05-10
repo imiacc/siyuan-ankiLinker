@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.1.3
+
+- 删除 `plugin.json` 中空的 `funding` 字段。
+- 删除与 `default` 完全重复的 `displayName.en_US` 与 `description.en_US`，消除冗余 locale 配置。
+
+## 0.1.2
+
+- 将插件实际 ID 从 `ankiLinker` 统一调整为 `siyuan-ankiLinker`，使手动安装目录名与仓库名保持一致。
+- 增加旧插件 ID `ankiLinker` 到新插件 ID `siyuan-ankiLinker` 的本地数据迁移逻辑，尽量避免升级后配置与映射丢失。
+- 运行时全局键、顶栏图标标识、面板根节点类名/ID 等内部命名同步切换到 `siyuan-ankiLinker` 风格。
+- Anki 标签查询与写入兼容新旧标签，避免既有同步记录失联。
+- 卸载时同时尝试清理新旧插件 ID 目录下的持久化数据。
+
 ## 0.1.1
 
 - 单独更新并提交 `preview.png`，覆盖远端预览图。
