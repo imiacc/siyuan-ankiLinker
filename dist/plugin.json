@@ -2,16 +2,20 @@
   "name": "siyuan-ankiLinker",
   "author": "imiacc",
   "url": "https://github.com/imiacc/siyuan-ankiLinker",
-  "version": "0.1.5",
+    "version": "0.1.6",
+
 
   "minAppVersion": "2.10.14",
 
-  "disabledInPublish": false,
+  "disabledInPublish": true,
   "backends": [
-    "all"
+    "windows",
+    "linux",
+    "darwin"
   ],
   "frontends": [
-    "all"
+    "desktop",
+    "desktop-window"
   ],
   "displayName": {
     "default": "Anki Linker",
@@ -34,6 +38,7 @@
     "riff"
   ]
 }
+
 
 
 

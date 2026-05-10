@@ -7,11 +7,22 @@
           <h1>{{ locale.panelTitle }}</h1>
           <p class="desc">{{ locale.panelSubtitle }}</p>
         </div>
-        <div class="hero-actions">
-          <SyButton @click="detectConnection">{{ locale.detectConnection }}</SyButton>
-          <SyButton @click="refreshRemoteMeta">{{ locale.refreshRemoteMeta }}</SyButton>
-          <SyButton @click="saveSettings">{{ locale.saveSettings }}</SyButton>
-          <SyButton @click="closePanel">{{ locale.closePanel }}</SyButton>
+        <div class="hero-actions hero-actions--stacked">
+          <div class="button-row hero-actions__row">
+            <SyButton @click="detectConnection">{{ locale.detectConnection }}</SyButton>
+            <SyButton @click="refreshRemoteMeta">{{ locale.refreshRemoteMeta }}</SyButton>
+            <SyButton @click="exportSettings">{{ locale.exportSettings }}</SyButton>
+            <SyButton @click="triggerImportSettings">{{ locale.importSettings }}</SyButton>
+            <SyButton @click="saveSettings">{{ locale.saveSettings }}</SyButton>
+            <SyButton @click="closePanel">{{ locale.closePanel }}</SyButton>
+          </div>
+          <input
+            ref="importInputRef"
+            class="fn__none"
+            type="file"
+            accept="application/json,.json"
+            @change="importSettingsFromFile"
+          >
         </div>
       </header>
 
@@ -78,18 +89,16 @@
               <div v-for="(rule, index) in settings.pathDeckRules" :key="`rule-${index}`" class="path-rule-item path-rule-item--column">
                 <template v-if="!ruleEditStates[index]">
                   <div class="path-rule-summary-row">
-                    <div class="path-rule-summary-grid">
-                      <div class="path-rule-summary-cell path-rule-summary-cell--path" :title="rule.path || locale.notSelected">
-                        {{ rule.path || locale.notSelected }}
-                      </div>
-                      <div class="path-rule-summary-arrow">-&gt;</div>
-                      <div class="path-rule-summary-cell" :title="rule.deckName || settings.deckName">
-                        {{ rule.deckName || settings.deckName }}
-                      </div>
+                    <div class="path-rule-summary-cell path-rule-summary-cell--path" :title="rule.path || locale.notSelected">
+                      {{ rule.path || locale.notSelected }}
                     </div>
-                    <div class="button-row button-row--compact button-row--nowrap">
-                      <SyButton class="icon-button" :title="locale.edit" @click="startEditPathRule(index)">✎</SyButton>
-                      <SyButton class="icon-button" :title="locale.remove" @click="removePathRule(index)">🗑</SyButton>
+                    <div class="path-rule-summary-arrow">-&gt;</div>
+                    <div class="path-rule-summary-cell path-rule-summary-cell--deck" :title="rule.deckName || settings.deckName">
+                      {{ rule.deckName || settings.deckName }}
+                    </div>
+                    <div class="path-rule-summary-actions">
+                      <SyButton class="path-rule-action-button" type="button" @click="startEditPathRule(index)">{{ locale.edit }}</SyButton>
+                      <SyButton class="path-rule-action-button" type="button" @click="removePathRule(index)">{{ locale.remove }}</SyButton>
                     </div>
                   </div>
                 </template>
@@ -161,6 +170,41 @@
             <p class="meta">SQL {{ locale.fallback }}：{{ diagnostics.sqlCount }} {{ locale.cardUnit }}</p>
             <p class="meta">{{ locale.relatedTables }}：{{ diagnostics.tableNames.join(' / ') || locale.notFound }}</p>
             <p class="meta">cards {{ locale.tableColumns }}：{{ diagnostics.cardColumns.join(' / ') || locale.notFound }}</p>
+
+            <div class="diagnostic-subsection">
+              <div class="log-header">
+                <h3>{{ locale.deletionDiagnostics }}</h3>
+                <div class="button-row button-row--compact">
+                  <SyButton class="icon-button" :title="locale.refreshDeletionDiagnostics" @click="refreshDeletionDiagnostics">↻</SyButton>
+                </div>
+              </div>
+              <p class="meta">{{ locale.deletionAllowed }}：{{ deletionDiagnostics?.allowDeletion ? 'Yes' : 'No' }}</p>
+              <p class="meta">{{ locale.matchedMappings }}：{{ deletionDiagnostics?.matchedCount ?? 0 }} {{ locale.mappingUnit }}</p>
+              <p class="meta">{{ locale.orphanMappings }}：{{ deletionDiagnostics?.orphanCount ?? 0 }} {{ locale.mappingUnit }}</p>
+              <div class="diagnostic-filter-row">
+                <label class="diagnostic-toggle">
+                  <input v-model="deletionDiagnosticsFilter.onlyOrphans" type="checkbox">
+                  <span>{{ locale.onlyOrphans }}</span>
+                </label>
+                <div class="diagnostic-filter-inputs">
+                  <SyInput v-model="deletionDiagnosticsFilter.blockIdKeyword" :placeholder="locale.blockIdFilterPlaceholder" />
+                  <SyButton class="icon-button" type="button" :title="locale.clearFilter" @click="clearDeletionDiagnosticsFilter">⌫</SyButton>
+                </div>
+              </div>
+              <ul class="diagnostic-list diagnostic-list--scrollable">
+                <li v-for="item in deletionDiagnosticItems" :key="item.key" class="diagnostic-item" :class="{ 'diagnostic-item--orphan': !item.matched }">
+                  <div class="diagnostic-item__main">
+                    <strong>{{ item.title }}</strong>
+                    <span>{{ item.subtitle }}</span>
+                  </div>
+                  <div class="diagnostic-item__side">
+                    <span>{{ locale.matchReason }}：{{ item.matchLabel }}</span>
+                    <span>{{ locale.matchedCandidate }}：{{ item.matchedCandidate }}</span>
+                  </div>
+                </li>
+                <li v-if="deletionDiagnosticItems.length === 0" class="meta">{{ locale.noDeletionDiagnostics }}</li>
+              </ul>
+            </div>
           </div>
         </article>
 
@@ -226,13 +270,15 @@ import { getHPathByPath, lsNotebooks, listDocsByPath } from '@/api'
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { hidePanel, usePlugin } from '@/main'
 import { createAnkiClient } from '@/utils/anki'
-import { buildSyncPreview, cleanupInvalidMappings, getAvailableCards, getCardDiagnostics, runSync } from '@/utils/sync'
+import { buildDeletionDiagnostics, buildSyncPreview, cleanupInvalidMappings, getAvailableCards, getCardDiagnostics, runSync } from '@/utils/sync'
 import { getPluginI18n } from '@/index'
-import type { AnkiLinkerMapping, AnkiLinkerSettings, PathDeckRule, SyncLogItem, SyncPreviewResult } from '@/types/plugin'
+import type { AnkiLinkerMapping, AnkiLinkerSettings, DeletionDiagnosticsFilter, DeletionDiagnosticsResult, PathDeckRule, SyncLogItem, SyncPreviewResult } from '@/types/plugin'
 
-type LegacyPersistedState = {
+type ExportedSettingsFile = {
+  version: 1
+  exportedAt: string
+  plugin: string
   settings: AnkiLinkerSettings
-  mappings: AnkiLinkerMapping[]
 }
 
 type SelectOption = {
@@ -255,7 +301,6 @@ type PathSearchState = {
 const PLUGIN_RUNTIME_KEY = '_sy_siyuan_ankiLinker'
 const SETTINGS_STORAGE_KEY = 'settings.json'
 const MAPPINGS_STORAGE_KEY = 'mappings.json'
-const LEGACY_STORAGE_KEY = 'ankilinker-state.json'
 
 const plugin = usePlugin()
 const locale = reactive({
@@ -263,6 +308,8 @@ const locale = reactive({
   heroEyebrow: plugin.i18n.heroEyebrow || 'SiYuan to Local Anki',
   detectConnection: plugin.i18n.detectConnection || 'Detect Local Connection',
   refreshRemoteMeta: plugin.i18n.refreshRemoteMeta || 'Refresh Decks/Models',
+  exportSettings: plugin.i18n.exportSettings || 'Export Config',
+  importSettings: plugin.i18n.importSettings || 'Import Config',
   saveSettings: plugin.i18n.saveSettings || 'Save Settings',
   closePanel: plugin.i18n.closePanel || 'Close Panel',
   localAnkiConnect: plugin.i18n.localAnkiConnect || 'Local AnkiConnect',
@@ -323,6 +370,22 @@ const locale = reactive({
   collapseLogs: plugin.i18n.collapseLogs || 'Collapse Logs',
   expandLogs: plugin.i18n.expandLogs || 'Expand Logs',
   clearLogs: plugin.i18n.clearLogs || 'Clear Logs',
+  deletionDiagnostics: plugin.i18n.deletionDiagnostics || 'Deletion Diagnostics',
+  refreshDeletionDiagnostics: plugin.i18n.refreshDeletionDiagnostics || 'Refresh Deletion Diagnostics',
+  deletionAllowed: plugin.i18n.deletionAllowed || 'Deletion Allowed',
+  orphanMappings: plugin.i18n.orphanMappings || 'Orphan Mappings',
+  matchedMappings: plugin.i18n.matchedMappings || 'Matched Mappings',
+  matchReason: plugin.i18n.matchReason || 'Match Reason',
+  matchedCandidate: plugin.i18n.matchedCandidate || 'Matched Candidate',
+  orphan: plugin.i18n.orphan || 'Orphan',
+  matchedByCardId: plugin.i18n.matchedByCardId || 'Matched by cardId',
+  matchedByBlockId: plugin.i18n.matchedByBlockId || 'Matched by blockId',
+  noDeletionDiagnostics: plugin.i18n.noDeletionDiagnostics || 'No deletion diagnostics yet',
+  onlyOrphans: plugin.i18n.onlyOrphans || 'Only Orphans',
+  blockIdFilter: plugin.i18n.blockIdFilter || 'Filter by blockId',
+  blockIdFilterPlaceholder: plugin.i18n.blockIdFilterPlaceholder || 'Filter blockId / cardId / path',
+  clearFilter: plugin.i18n.clearFilter || 'Clear Filter',
+  importConfigInvalid: plugin.i18n.importConfigInvalid || 'Invalid config file',
 })
 const connectionStatus = ref('未检测')
 const deckOptions = ref<SelectOption[]>([{ value: 'Default', text: 'Default' }])
@@ -339,8 +402,14 @@ const showDiagnostics = ref(false)
 const showPreviewDetails = ref(false)
 const showAnkiConfig = ref(true)
 const showPathRules = ref(true)
+const importInputRef = ref<HTMLInputElement | null>(null)
 const mappings = ref<AnkiLinkerMapping[]>([])
 const previewResult = ref<SyncPreviewResult | null>(null)
+const deletionDiagnostics = ref<DeletionDiagnosticsResult | null>(null)
+const deletionDiagnosticsFilter = reactive<DeletionDiagnosticsFilter>({
+  onlyOrphans: false,
+  blockIdKeyword: '',
+})
 
 const settings = reactive<AnkiLinkerSettings>({
   ankiUrl: 'http://127.0.0.1:8765',
@@ -387,6 +456,59 @@ const previewItems = computed(() => {
     ...previewResult.value.invalid.map(item => ({ key: `invalid-${item.cardId}`, type: '无效', title: `${item.cardId} -> ${item.hPath || item.blockId}（${item.validationMessage || '未识别为问答块、超级块问答或 ==填空=='}）` })),
   ]
 })
+
+const deletionDiagnosticItems = computed(() => {
+  if (!deletionDiagnostics.value) {
+    return []
+  }
+
+  const keyword = deletionDiagnosticsFilter.blockIdKeyword.trim().toLowerCase()
+
+  return deletionDiagnostics.value.diagnostics
+    .filter((item) => {
+      if (deletionDiagnosticsFilter.onlyOrphans && item.matched) {
+        return false
+      }
+
+      if (!keyword) {
+        return true
+      }
+
+      return [
+        item.siyuanCardId,
+        item.siyuanBlockId,
+        item.hPath || '',
+        item.matchedCandidateCardId,
+        item.matchedCandidateBlockId,
+        item.matchedCandidatePath,
+      ].some(value => String(value || '').toLowerCase().includes(keyword))
+    })
+    .map((item) => {
+      const matchLabel = item.matchReason === 'cardId'
+        ? locale.matchedByCardId
+        : item.matchReason === 'blockId'
+          ? locale.matchedByBlockId
+          : locale.orphan
+
+      const matchedCandidate = item.matched
+        ? `${item.matchedCandidateCardId || locale.notFound} / ${item.matchedCandidateBlockId || locale.notFound}${item.matchedCandidatePath ? ` / ${item.matchedCandidatePath}` : ''}`
+        : locale.notFound
+
+      return {
+        key: item.key,
+        title: `${item.siyuanCardId} / ${item.siyuanBlockId}`,
+        subtitle: `${item.hPath || item.deckName} / note:${item.ankiNoteId}`,
+        matchLabel,
+        matchedCandidate,
+        matched: item.matched,
+      }
+    })
+})
+
+const clearDeletionDiagnosticsFilter = () => {
+  deletionDiagnosticsFilter.onlyOrphans = false
+  deletionDiagnosticsFilter.blockIdKeyword = ''
+}
 
 const addLog = (message: string) => {
   logs.value.unshift({
@@ -620,6 +742,17 @@ const cleanupMappings = async () => {
   }
 }
 
+const refreshDeletionDiagnostics = async () => {
+  try {
+    deletionDiagnostics.value = await buildDeletionDiagnostics(settings, mappings.value)
+    const matchedCount = deletionDiagnostics.value.matchedCount
+    const orphanCount = deletionDiagnostics.value.orphanCount
+    addLog(`删除判定诊断完成：允许删除 ${deletionDiagnostics.value.allowDeletion ? '是' : '否'}；命中 ${matchedCount} 条；孤儿映射 ${orphanCount} 条`)
+  } catch (error) {
+    addLog(`删除判定诊断失败：${String(error)}`)
+  }
+}
+
 const refreshCardStats = async () => {
   const available = await getAvailableCards()
   const detail = await getCardDiagnostics()
@@ -646,6 +779,75 @@ const persistState = async () => {
     plugin.saveData(SETTINGS_STORAGE_KEY, settingsPayload),
     plugin.saveData(MAPPINGS_STORAGE_KEY, mappingsPayload),
   ])
+}
+
+const buildSettingsExportPayload = (): ExportedSettingsFile => ({
+  version: 1,
+  exportedAt: new Date().toISOString(),
+  plugin: 'siyuan-ankiLinker',
+  settings: {
+    ...settings,
+    pathDeckRules: settings.pathDeckRules.map(rule => ({ ...rule })),
+  },
+})
+
+const applyImportedSettings = (settingsData: Partial<AnkiLinkerSettings> | null | undefined) => {
+  if (!settingsData || typeof settingsData !== 'object') {
+    throw new Error(locale.importConfigInvalid)
+  }
+
+  Object.assign(settings, {
+    ...settings,
+    ...settingsData,
+    pathDeckRules: Array.isArray(settingsData.pathDeckRules) ? settingsData.pathDeckRules : [],
+  })
+  syncRuleSearchStates()
+}
+
+const exportSettings = async () => {
+  try {
+    const payload = buildSettingsExportPayload()
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const anchor = document.createElement('a')
+    anchor.href = url
+    anchor.download = `siyuan-ankiLinker-settings-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}.json`
+    document.body.appendChild(anchor)
+    anchor.click()
+    anchor.remove()
+    URL.revokeObjectURL(url)
+    addLog('配置文件已导出')
+  } catch (error) {
+    addLog(`导出配置文件失败：${String(error)}`)
+  }
+}
+
+const triggerImportSettings = () => {
+  importInputRef.value?.click()
+}
+
+const importSettingsFromFile = async (event: Event) => {
+  const input = event.target as HTMLInputElement | null
+  const file = input?.files?.[0]
+  if (!file) {
+    return
+  }
+
+  try {
+    const text = await file.text()
+    const parsed = JSON.parse(text) as Partial<ExportedSettingsFile> | Partial<AnkiLinkerSettings>
+    const settingsPayload = 'settings' in (parsed || {}) ? parsed.settings : parsed
+    applyImportedSettings(settingsPayload as Partial<AnkiLinkerSettings>)
+    await refreshRemoteMeta()
+    await persistState()
+    addLog(`已导入配置文件：${file.name}`)
+  } catch (error) {
+    addLog(`导入配置文件失败：${String(error)}`)
+  } finally {
+    if (input) {
+      input.value = ''
+    }
+  }
 }
 
 const applyFieldOptions = (target: 'qa' | 'cloze', fields: string[]) => {
@@ -703,24 +905,7 @@ const loadState = async () => {
       mappings.value = mappingsData
     }
 
-    if (!settingsData && !mappingsData) {
-      const legacyData = await plugin.loadData(LEGACY_STORAGE_KEY) as LegacyPersistedState | null
-      if (!legacyData) {
-        return
-      }
-
-      Object.assign(settings, {
-        ...settings,
-        ...(legacyData.settings || {}),
-        pathDeckRules: legacyData.settings?.pathDeckRules || [],
-      })
-      mappings.value = legacyData.mappings || []
-      await persistState()
-      addLog('已从旧版单文件存储迁移配置与映射数据')
-    } else {
-      addLog('已加载本地配置与映射数据')
-    }
-
+    addLog('已加载本地配置与映射数据')
     syncRuleSearchStates()
   } catch (error) {
     addLog(`加载本地数据失败：${String(error)}`)
@@ -799,6 +984,7 @@ const previewSync = async () => {
   try {
     await refreshCardStats()
     previewResult.value = await buildSyncPreview(settings, mappings.value)
+    await refreshDeletionDiagnostics()
     showPreviewDetails.value = true
     addLog(`同步预览完成：新增 ${previewSummary.value.added}，更新 ${previewSummary.value.updated}，删除 ${previewSummary.value.deleted}，无效 ${previewSummary.value.invalid}`)
   } catch (error) {
@@ -811,6 +997,7 @@ const syncToAnki = async () => {
     const result = await runSync(settings, mappings.value)
     mappings.value = result.mappings
     previewResult.value = result.preview
+    await refreshDeletionDiagnostics()
     showPreviewDetails.value = true
     await persistState()
     addLog(`同步完成：新增 ${result.preview.summary.added}，更新 ${result.preview.summary.updated}，删除 ${result.preview.summary.deleted}`)
@@ -828,6 +1015,7 @@ onMounted(async () => {
   window.addEventListener('keydown', handleEscapeKey)
   await loadState()
   await refreshCardStats()
+  await refreshDeletionDiagnostics()
   await refreshRemoteMeta()
   await refreshPathOptions()
 })
@@ -875,6 +1063,15 @@ onUnmounted(() => {
 
 .hero--top-actions-right .hero-actions {
   margin-left: auto;
+  justify-content: flex-end;
+}
+
+.hero-actions--stacked {
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.hero-actions__row {
   justify-content: flex-end;
 }
 
@@ -1012,6 +1209,8 @@ onUnmounted(() => {
 }
 
 .path-rule-item--column {
+  display: flex;
+  flex-direction: column;
   align-items: stretch;
 }
 
@@ -1041,14 +1240,6 @@ onUnmounted(() => {
   gap: 8px;
 }
 
-.path-picker-grid {
-  display: none;
-}
-
-.path-search-row {
-  display: none;
-}
-
 .path-rule-actions {
   align-items: center;
   justify-content: space-between;
@@ -1062,21 +1253,15 @@ onUnmounted(() => {
 
 .path-rule-summary-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 10px;
-  align-items: center;
-}
-
-.path-rule-summary-grid {
-  min-width: 0;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto minmax(140px, 220px);
-  align-items: center;
+  grid-template-columns: minmax(0, 1fr) 20px minmax(0, 220px) auto;
   gap: 8px;
+  align-items: center;
+  width: 100%;
 }
 
 .path-rule-summary-cell {
   min-width: 0;
+  max-width: 100%;
   overflow-x: auto;
   overflow-y: hidden;
   white-space: nowrap;
@@ -1088,9 +1273,27 @@ onUnmounted(() => {
   text-align: left;
 }
 
+.path-rule-summary-cell--deck {
+  text-align: left;
+}
+
 .path-rule-summary-arrow {
   color: var(--b3-theme-on-surface-light);
   font-size: 12px;
+  width: 20px;
+  text-align: center;
+}
+
+.path-rule-summary-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  min-width: max-content;
+  margin-left: auto;
+}
+
+.path-rule-action-button {
+  min-width: 56px;
 }
 
 .icon-button {
@@ -1138,6 +1341,84 @@ onUnmounted(() => {
   gap: 6px;
 }
 
+.diagnostic-subsection {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--b3-border-color);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.diagnostic-filter-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.diagnostic-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--b3-theme-on-surface-light);
+  font-size: 13px;
+}
+
+.diagnostic-filter-inputs {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex: 1;
+  min-width: min(100%, 260px);
+}
+
+.diagnostic-filter-inputs > :first-child {
+  flex: 1;
+}
+
+.diagnostic-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.diagnostic-list--scrollable {
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+.diagnostic-item {
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--b3-theme-background) 84%, var(--b3-theme-primary) 16%);
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.diagnostic-item--orphan {
+  background: color-mix(in srgb, var(--b3-theme-background) 82%, var(--b3-card-warning-color, #d97706) 18%);
+}
+
+.diagnostic-item__main,
+.diagnostic-item__side {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.diagnostic-item__main span,
+.diagnostic-item__side span,
+.diagnostic-item__main strong {
+  overflow-wrap: anywhere;
+}
+
 @media (max-width: 900px) {
   .panel-grid--two {
     grid-template-columns: 1fr;
@@ -1162,10 +1443,10 @@ onUnmounted(() => {
   .hero,
   .preview-list li,
   .log-panel li,
-  .path-rule-item,
   .panel-header,
   .path-rule-actions,
-  .path-rule-summary-row {
+  .diagnostic-item,
+  .diagnostic-filter-row {
     flex-direction: column;
     align-items: stretch;
   }
@@ -1175,15 +1456,18 @@ onUnmounted(() => {
     align-items: stretch;
   }
 
-  .path-rule-summary-row,
-  .path-rule-summary-grid {
-    display: flex;
-    flex-direction: column;
-    align-items: stretch;
+  .path-rule-summary-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 6px;
   }
 
-  .path-rule-summary-arrow {
-    text-align: center;
+  .path-rule-summary-actions {
+    justify-content: flex-start;
+    width: 100%;
+  }
+
+  .path-rule-action-button {
+    flex: 1;
   }
 }
 </style>

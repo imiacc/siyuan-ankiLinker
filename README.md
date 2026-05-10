@@ -5,7 +5,7 @@ SiYuan flashcard sync plugin for local Anki.
 - Plugin ID / manual install folder name: `siyuan-ankiLinker`
 - Repository: <https://github.com/imiacc/siyuan-ankiLinker>
 - Author: `imiacc`
-- Current version: `0.1.5`
+- Current version: `0.1.6`
 
 ## Manual installation note
 
@@ -17,8 +17,8 @@ When installing manually, make sure the plugin directory is named exactly:
 
 - `siyuan-ankiLinker`
 
-The plugin no longer includes compatibility support for the old `ankiLinker` plugin tag.
-If you previously synced notes with that legacy tag, existing notes will not be discovered through that tag anymore after upgrading.
+The plugin now works only with the current `siyuan-ankiLinker` identity and tag.
+It does not read, migrate, or clean up data from older plugin variants.
 Newly created notes are tagged only with the current plugin tag.
 
 ## Sync architecture
@@ -44,6 +44,9 @@ Requirements:
 - Automatically reads field names from the selected Anki note type and lets you choose them from dropdowns
 - Supports routing cards to different Anki decks based on SiYuan document path prefixes
 - Sync preview, logs, and local mapping persistence
+- Config export/import from the top action area
+- Deletion diagnostics to inspect whether mappings can be safely deleted
+- Improved aligned path-rule summary rows with right-side edit/remove actions
 
 ## Supported card parsing
 
@@ -139,21 +142,24 @@ The plugin discovers its synced Anki notes by the current plugin tag only:
 
 - `siyuan-anki-linker`
 
-It no longer queries the legacy tag:
-
-- `ankiLinker`
-
-If you rely on older notes created only with the legacy tag, re-syncing from SiYuan may create fresh notes under the current tag.
-
 ## Uninstall cleanup
 
 When the plugin is fully uninstalled, it removes its own persisted SiYuan plugin data files, including:
 
 - `settings.json`
 - `mappings.json`
-- legacy `ankilinker-state.json`
 
 This cleanup only happens during full uninstall, not on normal disable, reload, or update, so your settings will not be accidentally lost during routine development or upgrades.
+
+## What changed in 0.1.6
+
+- Added config export/import actions in the top toolbar area
+- Added deletion diagnostics for mapping safety checks before delete decisions
+- Improved path-to-deck rule summary alignment and actions layout
+- Improved sync internals with snapshot/tag cache and batched update execution
+- Improved Markdown asset link rewriting before writing content to Anki
+- Updated uninstall cleanup to fully remove only current `siyuan-ankiLinker` plugin storage
+- Updated README and changelog for the current publishable release
 
 ## Build
 

@@ -3,9 +3,11 @@ import { createAnkiClient } from '@/utils/anki'
 import type {
   AnkiLinkerMapping,
   AnkiLinkerSettings,
+  DeletionDiagnosticsResult,
   FlashcardCandidate,
   FlashcardKind,
   FlashcardPreview,
+  MappingDeletionDiagnostic,
   SyncPreviewResult,
 } from '@/types/plugin'
 import type { ICard } from 'siyuan'
@@ -31,6 +33,22 @@ type CardSourceSnapshot = {
   blockScanReliable: boolean
 }
 
+type CandidateIndex = {
+  byCardId: Map<string, FlashcardCandidate>
+  byBlockId: Map<string, FlashcardCandidate>
+}
+
+type MappingIndex = {
+  byCardId: Map<string, AnkiLinkerMapping>
+  byBlockId: Map<string, AnkiLinkerMapping>
+}
+
+type AnkiTagMappingCache = {
+  noteIds: number[]
+  noteIdByCardTag: Map<string, number>
+  fetchedAt: number
+}
+
 const RUNTIME_KEY = '_sy_siyuan_ankiLinker'
 const PRIMARY_PLUGIN_TAG = 'siyuan-anki-linker'
 const DEFAULT_SEPARATOR_PATTERN = /^-{3,}$|^\*{3,}$/m
@@ -42,6 +60,16 @@ const CLOZE_PATTERN = /==(.+?)==/g
 const FLASHCARD_BLOCK_IAL_PATTERN = "%custom-riff-decks%"
 const LEGACY_FLASHCARD_BLOCK_IAL_PATTERN = "%custom-fsrs-flashcard%"
 const SQL_SCAN_PAGE_SIZE = 64
+const SNAPSHOT_CACHE_TTL = 3000
+const ANKI_TAG_CACHE_TTL = 15000
+const UPDATE_BATCH_SIZE = 20
+
+let snapshotCache: {
+  value: CardSourceSnapshot
+  expiresAt: number
+} | null = null
+
+const ankiTagMappingCache = new Map<string, AnkiTagMappingCache>()
 
 function toSyntheticCardId(blockID: string) {
   return `block:${blockID}`
@@ -162,6 +190,10 @@ async function querySqlInPages<T>(buildStatement: (offset: number, limit: number
 }
 
 async function getCardSourceSnapshot(): Promise<CardSourceSnapshot> {
+  if (snapshotCache && snapshotCache.expiresAt > Date.now()) {
+    return snapshotCache.value
+  }
+
   const [cachedCards, apiCards, dueCards, sqlCardsResult, blockScannedCardsResult] = await Promise.all([
     Promise.resolve(getCachedCards()).then(cards => mergeCardLists(cards)),
     getApiCards(),
@@ -170,7 +202,7 @@ async function getCardSourceSnapshot(): Promise<CardSourceSnapshot> {
     scanFlashcardBlocks(),
   ])
 
-  return {
+  const snapshot: CardSourceSnapshot = {
     cachedCards,
     apiCards,
     dueCards,
@@ -180,6 +212,13 @@ async function getCardSourceSnapshot(): Promise<CardSourceSnapshot> {
     sqlCardsReliable: sqlCardsResult.reliable,
     blockScanReliable: blockScannedCardsResult.reliable,
   }
+
+  snapshotCache = {
+    value: snapshot,
+    expiresAt: Date.now() + SNAPSHOT_CACHE_TTL,
+  }
+
+  return snapshot
 }
 
 function sanitizeSiyuanMarkdown(markdown: string) {
@@ -472,28 +511,99 @@ function getCandidateTag(cardId: string) {
   return `siyuan-card:${cardId}`
 }
 
-function findMappingForCandidate(candidate: FlashcardCandidate, mappings: AnkiLinkerMapping[]) {
+function createCandidateIndex(candidates: FlashcardCandidate[]): CandidateIndex {
+  const byCardId = new Map<string, FlashcardCandidate>()
+  const byBlockId = new Map<string, FlashcardCandidate>()
+
+  for (const candidate of candidates) {
+    const cardId = String(candidate.cardId || '').trim()
+    const blockId = String(candidate.blockId || '').trim()
+
+    if (cardId && !byCardId.has(cardId)) {
+      byCardId.set(cardId, candidate)
+    }
+    if (blockId && !byBlockId.has(blockId)) {
+      byBlockId.set(blockId, candidate)
+    }
+  }
+
+  return { byCardId, byBlockId }
+}
+
+function createMappingIndex(mappings: AnkiLinkerMapping[]): MappingIndex {
+  const byCardId = new Map<string, AnkiLinkerMapping>()
+  const byBlockId = new Map<string, AnkiLinkerMapping>()
+
+  for (const mapping of mappings) {
+    const cardId = String(mapping.siyuanCardId || '').trim()
+    const blockId = String(mapping.siyuanBlockId || '').trim()
+
+    if (cardId && !byCardId.has(cardId)) {
+      byCardId.set(cardId, mapping)
+    }
+    if (blockId && !byBlockId.has(blockId)) {
+      byBlockId.set(blockId, mapping)
+    }
+  }
+
+  return { byCardId, byBlockId }
+}
+
+function findMappingByCandidateFromIndex(candidate: FlashcardCandidate, mappingIndex: MappingIndex) {
   const candidateCardId = String(candidate.cardId || '').trim()
   const candidateBlockId = String(candidate.blockId || '').trim()
 
-  return mappings.find(mapping => {
-    const mappingCardId = String(mapping.siyuanCardId || '').trim()
-    const mappingBlockId = String(mapping.siyuanBlockId || '').trim()
-    return (candidateCardId && mappingCardId === candidateCardId)
-      || (candidateBlockId && mappingBlockId === candidateBlockId)
-  })
+  if (candidateCardId) {
+    const matchedByCardId = mappingIndex.byCardId.get(candidateCardId)
+    if (matchedByCardId) {
+      return matchedByCardId
+    }
+  }
+
+  if (candidateBlockId) {
+    return mappingIndex.byBlockId.get(candidateBlockId)
+  }
+
+  return undefined
 }
 
-function findCandidateForMapping(mapping: AnkiLinkerMapping, candidates: FlashcardCandidate[]) {
+function findCandidateMatchForMappingFromIndex(mapping: AnkiLinkerMapping, candidateIndex: CandidateIndex) {
   const mappingCardId = String(mapping.siyuanCardId || '').trim()
   const mappingBlockId = String(mapping.siyuanBlockId || '').trim()
 
-  return candidates.find(candidate => {
-    const candidateCardId = String(candidate.cardId || '').trim()
-    const candidateBlockId = String(candidate.blockId || '').trim()
-    return (mappingCardId && candidateCardId === mappingCardId)
-      || (mappingBlockId && candidateBlockId === candidateBlockId)
-  })
+  if (mappingCardId) {
+    const candidate = candidateIndex.byCardId.get(mappingCardId)
+    if (candidate) {
+      return {
+        candidate,
+        matchReason: 'cardId' as const,
+      }
+    }
+  }
+
+  if (mappingBlockId) {
+    const candidate = candidateIndex.byBlockId.get(mappingBlockId)
+    if (candidate) {
+      return {
+        candidate,
+        matchReason: 'blockId' as const,
+      }
+    }
+  }
+
+  return null
+}
+
+function findMappingForCandidate(candidate: FlashcardCandidate, mappings: AnkiLinkerMapping[]) {
+  return findMappingByCandidateFromIndex(candidate, createMappingIndex(mappings))
+}
+
+function findCandidateMatchForMapping(mapping: AnkiLinkerMapping, candidates: FlashcardCandidate[]) {
+  return findCandidateMatchForMappingFromIndex(mapping, createCandidateIndex(candidates))
+}
+
+function findCandidateForMapping(mapping: AnkiLinkerMapping, candidates: FlashcardCandidate[]) {
+  return findCandidateMatchForMapping(mapping, candidates)?.candidate
 }
 
 function canSafelyDeleteMappings(snapshot: CardSourceSnapshot) {
@@ -501,40 +611,73 @@ function canSafelyDeleteMappings(snapshot: CardSourceSnapshot) {
     || (snapshot.blockScanReliable && snapshot.blockScannedCards.length > 0)
 }
 
+async function getAnkiTagMappingIndex(
+  settings: AnkiLinkerSettings,
+  forceRefresh = false,
+): Promise<AnkiTagMappingCache> {
+  const cacheKey = String(settings.ankiUrl || '').trim()
+  const cached = ankiTagMappingCache.get(cacheKey)
+  if (!forceRefresh && cached && cached.fetchedAt + ANKI_TAG_CACHE_TTL > Date.now()) {
+    return cached
+  }
+
+  const client = createAnkiClient(settings.ankiUrl)
+  const noteIds = await client.findNotes(`tag:${PRIMARY_PLUGIN_TAG}`)
+  const notes = noteIds.length > 0 ? await client.notesInfo(noteIds) : []
+  const noteIdByCardTag = new Map<string, number>()
+
+  for (const note of notes) {
+    for (const tag of note.tags || []) {
+      if (typeof tag === 'string' && tag.startsWith('siyuan-card:')) {
+        noteIdByCardTag.set(tag, note.noteId)
+      }
+    }
+  }
+
+  const nextCache: AnkiTagMappingCache = {
+    noteIds,
+    noteIdByCardTag,
+    fetchedAt: Date.now(),
+  }
+
+  ankiTagMappingCache.set(cacheKey, nextCache)
+  return nextCache
+}
+
+function invalidateSyncCaches(settings?: AnkiLinkerSettings) {
+  snapshotCache = null
+  if (settings) {
+    ankiTagMappingCache.delete(String(settings.ankiUrl || '').trim())
+    return
+  }
+  ankiTagMappingCache.clear()
+}
+
 async function hydrateMappingsFromAnki(
   settings: AnkiLinkerSettings,
   candidates: FlashcardCandidate[],
   mappings: AnkiLinkerMapping[],
 ): Promise<AnkiLinkerMapping[]> {
-  const unresolvedCandidates = candidates.filter(candidate => !findMappingForCandidate(candidate, mappings))
+  const mappingIndex = createMappingIndex(mappings)
+  const unresolvedCandidates = candidates.filter(candidate => !findMappingByCandidateFromIndex(candidate, mappingIndex))
   if (unresolvedCandidates.length === 0) {
     return mappings
   }
 
   try {
-    const client = createAnkiClient(settings.ankiUrl)
-    const noteIds = await client.findNotes(`tag:${PRIMARY_PLUGIN_TAG}`)
-    if (noteIds.length === 0) {
+    const tagMappingIndex = await getAnkiTagMappingIndex(settings)
+    if (tagMappingIndex.noteIds.length === 0) {
       return mappings
-    }
-
-    const notes = await client.notesInfo(noteIds)
-    const mappingByTag = new Map<string, number>()
-    for (const note of notes) {
-      for (const tag of note.tags || []) {
-        if (typeof tag === 'string' && tag.startsWith('siyuan-card:')) {
-          mappingByTag.set(tag, note.noteId)
-        }
-      }
     }
 
     const recoveredMappings: AnkiLinkerMapping[] = [...mappings]
     for (const candidate of unresolvedCandidates) {
-      const noteId = mappingByTag.get(getCandidateTag(candidate.cardId))
-      if (!noteId || findMappingForCandidate(candidate, recoveredMappings)) {
+      const noteId = tagMappingIndex.noteIdByCardTag.get(getCandidateTag(candidate.cardId))
+      if (!noteId || findMappingByCandidateFromIndex(candidate, mappingIndex)) {
         continue
       }
-      recoveredMappings.push({
+
+      const recoveredMapping: AnkiLinkerMapping = {
         siyuanCardId: candidate.cardId,
         siyuanDeckId: candidate.deckId,
         siyuanBlockId: candidate.blockId,
@@ -545,13 +688,69 @@ async function hydrateMappingsFromAnki(
         hash: candidate.hash,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
-      })
+      }
+
+      recoveredMappings.push(recoveredMapping)
+      if (recoveredMapping.siyuanCardId) {
+        mappingIndex.byCardId.set(recoveredMapping.siyuanCardId, recoveredMapping)
+      }
+      if (recoveredMapping.siyuanBlockId) {
+        mappingIndex.byBlockId.set(recoveredMapping.siyuanBlockId, recoveredMapping)
+      }
     }
 
     return recoveredMappings
   } catch {
     return mappings
   }
+}
+
+function normalizeAssetPath(path: string) {
+  const trimmedPath = String(path || '').trim()
+  if (!trimmedPath) {
+    return ''
+  }
+
+  if (/^(https?:|data:|file:|siyuan:|mailto:|anki:)/i.test(trimmedPath)) {
+    return trimmedPath
+  }
+
+  if (/^assets\//i.test(trimmedPath)) {
+    return `/${trimmedPath}`
+  }
+
+  if (/^\/assets\//i.test(trimmedPath)) {
+    return trimmedPath
+  }
+
+  return trimmedPath
+}
+
+function toAbsoluteSiyuanAssetUrl(path: string) {
+  const normalizedPath = normalizeAssetPath(path)
+  if (!normalizedPath || !/^\/assets\//i.test(normalizedPath)) {
+    return normalizedPath
+  }
+
+  try {
+    return new URL(normalizedPath, `${location.origin}/`).toString()
+  } catch {
+    return normalizedPath
+  }
+}
+
+function rewriteMarkdownAssetLinks(markdown: string) {
+  return String(markdown || '')
+    .replace(/(!?\[[^\]]*\]\()([^\)]+)(\))/g, (_, prefix: string, path: string, suffix: string) => {
+      return `${prefix}${toAbsoluteSiyuanAssetUrl(path)}${suffix}`
+    })
+    .replace(/\b(src|href)=(['"])([^'"]+)(\2)/gi, (_, attr: string, quote: string, path: string) => {
+      return `${attr}=${quote}${toAbsoluteSiyuanAssetUrl(path)}${quote}`
+    })
+}
+
+function prepareMarkdownForAnki(markdown: string) {
+  return rewriteMarkdownAssetLinks(String(markdown || '').trim())
 }
 
 function escapeHtml(value: string) {
@@ -564,14 +763,14 @@ function escapeHtml(value: string) {
 function buildAnkiFields(candidate: FlashcardCandidate, settings: AnkiLinkerSettings) {
   if (candidate.kind === 'cloze') {
     return {
-      [settings.clozeTextField]: escapeHtml(String(candidate.clozeText || candidate.rawMarkdown || '').trim()),
-      [settings.clozeExtraField]: escapeHtml(String(candidate.back || '').trim()),
+      [settings.clozeTextField]: escapeHtml(prepareMarkdownForAnki(String(candidate.clozeText || candidate.rawMarkdown || '').trim())),
+      [settings.clozeExtraField]: escapeHtml(prepareMarkdownForAnki(String(candidate.back || '').trim())),
     }
   }
 
   return {
-    [settings.qaFrontField]: escapeHtml(String(candidate.front || '').trim()),
-    [settings.qaBackField]: escapeHtml(String(candidate.back || '').trim()),
+    [settings.qaFrontField]: escapeHtml(prepareMarkdownForAnki(String(candidate.front || '').trim())),
+    [settings.qaBackField]: escapeHtml(prepareMarkdownForAnki(String(candidate.back || '').trim())),
   }
 }
 
@@ -645,6 +844,44 @@ export async function collectFlashcardCandidates(cards: ICard[], settings?: Anki
   return candidates
 }
 
+export async function buildDeletionDiagnostics(
+  settings: AnkiLinkerSettings,
+  mappings: AnkiLinkerMapping[],
+): Promise<DeletionDiagnosticsResult> {
+  const snapshot = await getCardSourceSnapshot()
+  const candidates = await collectFlashcardCandidates(snapshot.mergedCards, settings)
+  const candidateIndex = createCandidateIndex(candidates)
+  const hydratedMappings = await hydrateMappingsFromAnki(settings, candidates, mappings)
+  const allowDeletion = canSafelyDeleteMappings(snapshot)
+
+  const diagnostics: MappingDeletionDiagnostic[] = hydratedMappings.map((mapping) => {
+    const match = findCandidateMatchForMappingFromIndex(mapping, candidateIndex)
+    return {
+      key: `${mapping.siyuanCardId}-${mapping.ankiNoteId}`,
+      siyuanCardId: mapping.siyuanCardId,
+      siyuanBlockId: mapping.siyuanBlockId,
+      ankiNoteId: mapping.ankiNoteId,
+      hPath: mapping.hPath,
+      deckName: mapping.deckName,
+      noteType: mapping.noteType,
+      matched: Boolean(match),
+      matchReason: match?.matchReason || 'none',
+      matchedCandidateCardId: match?.candidate.cardId || '',
+      matchedCandidateBlockId: match?.candidate.blockId || '',
+      matchedCandidatePath: match?.candidate.hPath || '',
+    }
+  })
+
+  return {
+    allowDeletion,
+    candidateCount: candidates.length,
+    mappingCount: hydratedMappings.length,
+    orphanCount: diagnostics.filter(item => !item.matched).length,
+    matchedCount: diagnostics.filter(item => item.matched).length,
+    diagnostics,
+  }
+}
+
 export async function buildSyncPreview(
   settings: AnkiLinkerSettings,
   mappings: AnkiLinkerMapping[],
@@ -652,6 +889,7 @@ export async function buildSyncPreview(
   const snapshot = await getCardSourceSnapshot()
   const candidates = await collectFlashcardCandidates(snapshot.mergedCards, settings)
   const hydratedMappings = await hydrateMappingsFromAnki(settings, candidates, mappings)
+  const mappingIndex = createMappingIndex(hydratedMappings)
   const allowDeletion = canSafelyDeleteMappings(snapshot)
 
   const added: FlashcardCandidate[] = []
@@ -659,7 +897,7 @@ export async function buildSyncPreview(
   const unchanged: FlashcardCandidate[] = []
   const invalid: FlashcardCandidate[] = []
   const deleted = allowDeletion
-    ? hydratedMappings.filter(item => !findCandidateForMapping(item, candidates))
+    ? hydratedMappings.filter(item => !findCandidateMatchForMappingFromIndex(item, createCandidateIndex(candidates)))
     : []
 
   for (const candidate of candidates) {
@@ -668,7 +906,7 @@ export async function buildSyncPreview(
       continue
     }
 
-    const mapping = findMappingForCandidate(candidate, hydratedMappings)
+    const mapping = findMappingByCandidateFromIndex(candidate, mappingIndex)
     if (!mapping) {
       added.push(candidate)
       continue
@@ -714,9 +952,8 @@ export async function cleanupInvalidMappings(
     }
   }
 
-  const client = createAnkiClient(settings.ankiUrl)
-  const noteIds = await client.findNotes(`tag:${PRIMARY_PLUGIN_TAG}`)
-  if (noteIds.length === 0) {
+  const tagMappingIndex = await getAnkiTagMappingIndex(settings, true)
+  if (tagMappingIndex.noteIds.length === 0) {
     return {
       mappings: [],
       removedCount: mappings.length,
@@ -724,18 +961,7 @@ export async function cleanupInvalidMappings(
     }
   }
 
-  const notes = await client.notesInfo(noteIds)
-  const existingNoteIds = new Set<number>()
-  const noteIdByCardTag = new Map<string, number>()
-
-  for (const note of notes) {
-    existingNoteIds.add(note.noteId)
-    for (const tag of note.tags || []) {
-      if (typeof tag === 'string' && tag.startsWith('siyuan-card:')) {
-        noteIdByCardTag.set(tag, note.noteId)
-      }
-    }
-  }
+  const existingNoteIds = new Set<number>(tagMappingIndex.noteIds)
 
   let removedCount = 0
   let repairedCount = 0
@@ -747,7 +973,7 @@ export async function cleanupInvalidMappings(
       continue
     }
 
-    const repairedNoteId = noteIdByCardTag.get(getCandidateTag(mapping.siyuanCardId))
+    const repairedNoteId = tagMappingIndex.noteIdByCardTag.get(getCandidateTag(mapping.siyuanCardId))
     if (repairedNoteId) {
       nextMappings.push({
         ...mapping,
@@ -772,6 +998,13 @@ function isAnkiNoteNotFoundError(error: unknown) {
   return String(error || '').includes('Note was not found')
 }
 
+async function runInBatches<T>(items: T[], batchSize: number, worker: (item: T) => Promise<void>) {
+  for (let index = 0; index < items.length; index += batchSize) {
+    const batch = items.slice(index, index + batchSize)
+    await Promise.all(batch.map(item => worker(item)))
+  }
+}
+
 export async function runSync(
   settings: AnkiLinkerSettings,
   mappings: AnkiLinkerMapping[],
@@ -782,6 +1015,7 @@ export async function runSync(
   const preview = await buildSyncPreview(settings, mappings)
   const client = createAnkiClient(settings.ankiUrl)
   const rebuiltMappings = await hydrateMappingsFromAnki(settings, [...preview.added, ...preview.updated, ...preview.unchanged, ...preview.invalid], mappings)
+  const rebuiltMappingIndex = createMappingIndex(rebuiltMappings)
   const nextMappings = new Map(rebuiltMappings.map(item => [item.siyuanCardId, item]))
 
   if (preview.deleted.length > 0) {
@@ -795,8 +1029,8 @@ export async function runSync(
   if (preview.updated.length > 0) {
     const recreateItems: FlashcardCandidate[] = []
 
-    await Promise.all(preview.updated.map(async (item) => {
-      const mapping = findMappingForCandidate(item, rebuiltMappings)
+    await runInBatches(preview.updated, UPDATE_BATCH_SIZE, async (item) => {
+      const mapping = findMappingByCandidateFromIndex(item, rebuiltMappingIndex)
       if (!mapping) {
         recreateItems.push(item)
         return
@@ -809,6 +1043,7 @@ export async function runSync(
         })
         if (mapping.siyuanCardId !== item.cardId) {
           nextMappings.delete(mapping.siyuanCardId)
+          rebuiltMappingIndex.byCardId.delete(mapping.siyuanCardId)
         }
         nextMappings.set(item.cardId, {
           ...mapping,
@@ -826,9 +1061,11 @@ export async function runSync(
           throw error
         }
         nextMappings.delete(mapping.siyuanCardId)
+        rebuiltMappingIndex.byCardId.delete(mapping.siyuanCardId)
+        rebuiltMappingIndex.byBlockId.delete(mapping.siyuanBlockId)
         recreateItems.push(item)
       }
-    }))
+    })
 
     if (recreateItems.length > 0) {
       const recreatedNoteIds = await client.addNotes(recreateItems.map(item => ({
@@ -843,7 +1080,7 @@ export async function runSync(
         if (!noteId) {
           throw new Error(`重建 Anki 笔记失败，card ID: ${item.cardId}`)
         }
-        const previousMapping = findMappingForCandidate(item, rebuiltMappings)
+        const previousMapping = findMappingByCandidateFromIndex(item, rebuiltMappingIndex)
         nextMappings.set(item.cardId, {
           siyuanCardId: item.cardId,
           siyuanDeckId: item.deckId,
@@ -887,6 +1124,8 @@ export async function runSync(
       })
     })
   }
+
+  invalidateSyncCaches(settings)
 
   return {
     mappings: [...nextMappings.values()],

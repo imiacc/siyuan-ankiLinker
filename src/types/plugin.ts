@@ -79,3 +79,32 @@ export type SyncPreviewResult = {
     invalid: number
   }
 }
+
+export type MappingDeletionDiagnostic = {
+  key: string
+  siyuanCardId: string
+  siyuanBlockId: string
+  ankiNoteId: number
+  hPath?: string
+  deckName: string
+  noteType: string
+  matched: boolean
+  matchReason: 'cardId' | 'blockId' | 'none'
+  matchedCandidateCardId: string
+  matchedCandidateBlockId: string
+  matchedCandidatePath: string
+}
+
+export type DeletionDiagnosticsFilter = {
+  onlyOrphans: boolean
+  blockIdKeyword: string
+}
+
+export type DeletionDiagnosticsResult = {
+  allowDeletion: boolean
+  candidateCount: number
+  mappingCount: number
+  orphanCount: number
+  matchedCount: number
+  diagnostics: MappingDeletionDiagnostic[]
+}
