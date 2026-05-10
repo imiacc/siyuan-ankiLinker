@@ -20,6 +20,17 @@ type CardDiagnostics = {
   cardColumns: string[]
 }
 
+type CardSourceSnapshot = {
+  cachedCards: ICard[]
+  apiCards: ICard[]
+  dueCards: ICard[]
+  sqlCards: ICard[]
+  blockScannedCards: ICard[]
+  mergedCards: ICard[]
+  sqlCardsReliable: boolean
+  blockScanReliable: boolean
+}
+
 const RUNTIME_KEY = '_sy_siyuan_ankiLinker'
 const PRIMARY_PLUGIN_TAG = 'siyuan-anki-linker'
 const LEGACY_PLUGIN_TAG = 'ankilinker'
@@ -31,6 +42,7 @@ const SIYUAN_LAYOUT_CONTAINER_CLOSE_LINE_PATTERN = /^\s*\}\}\}\s*$/gm
 const CLOZE_PATTERN = /==(.+?)==/g
 const FLASHCARD_BLOCK_IAL_PATTERN = "%custom-riff-decks%"
 const LEGACY_FLASHCARD_BLOCK_IAL_PATTERN = "%custom-fsrs-flashcard%"
+const SQL_SCAN_PAGE_SIZE = 64
 
 function toSyntheticCardId(blockID: string) {
   return `block:${blockID}`
@@ -77,6 +89,98 @@ function normalizeCardList(payload: any): ICard[] {
   return extractCardArray(payload)
     .map((item: Record<string, any>) => normalizeCardLike(item))
     .filter((item: ICard | null): item is ICard => Boolean(item))
+}
+
+function mergeCardLists(...lists: ICard[][]): ICard[] {
+  const mergedByBlockId = new Map<string, ICard>()
+
+  for (const list of lists) {
+    for (const item of list) {
+      const blockID = String(item?.blockID || '').trim()
+      if (!blockID) {
+        continue
+      }
+
+      const normalizedItem: ICard = {
+        cardID: normalizeCardIdentity(String(item.cardID || ''), blockID),
+        blockID,
+        deckID: String(item.deckID || '').trim(),
+      }
+
+      const existing = mergedByBlockId.get(blockID)
+      if (!existing) {
+        mergedByBlockId.set(blockID, normalizedItem)
+        continue
+      }
+
+      const existingHasRealCardId = !String(existing.cardID || '').startsWith('block:')
+      const nextHasRealCardId = !String(normalizedItem.cardID || '').startsWith('block:')
+      const existingDeckID = String(existing.deckID || '').trim()
+      const nextDeckID = String(normalizedItem.deckID || '').trim()
+
+      if ((!existingHasRealCardId && nextHasRealCardId) || (!existingDeckID && !!nextDeckID)) {
+        mergedByBlockId.set(blockID, {
+          cardID: nextHasRealCardId ? normalizedItem.cardID : existing.cardID,
+          blockID,
+          deckID: nextDeckID || existingDeckID,
+        })
+      }
+    }
+  }
+
+  return [...mergedByBlockId.values()]
+}
+
+async function querySqlInPages<T>(buildStatement: (offset: number, limit: number) => string): Promise<{
+  rows: T[]
+  reliable: boolean
+}> {
+  const rows: T[] = []
+  let offset = 0
+  let reliable = true
+
+  while (true) {
+    const page = await sql(buildStatement(offset, SQL_SCAN_PAGE_SIZE))
+    const normalizedPage = Array.isArray(page) ? page as T[] : []
+    rows.push(...normalizedPage)
+
+    if (normalizedPage.length < SQL_SCAN_PAGE_SIZE) {
+      break
+    }
+
+    offset += SQL_SCAN_PAGE_SIZE
+
+    if (offset > 10000) {
+      reliable = false
+      break
+    }
+  }
+
+  return {
+    rows,
+    reliable,
+  }
+}
+
+async function getCardSourceSnapshot(): Promise<CardSourceSnapshot> {
+  const [cachedCards, apiCards, dueCards, sqlCardsResult, blockScannedCardsResult] = await Promise.all([
+    Promise.resolve(getCachedCards()).then(cards => mergeCardLists(cards)),
+    getApiCards(),
+    getApiDueCards(),
+    getSqlCards(),
+    scanFlashcardBlocks(),
+  ])
+
+  return {
+    cachedCards,
+    apiCards,
+    dueCards,
+    sqlCards: sqlCardsResult.cards,
+    blockScannedCards: blockScannedCardsResult.cards,
+    mergedCards: mergeCardLists(sqlCardsResult.cards, apiCards, cachedCards, blockScannedCardsResult.cards),
+    sqlCardsReliable: sqlCardsResult.reliable,
+    blockScanReliable: blockScannedCardsResult.reliable,
+  }
 }
 
 function sanitizeSiyuanMarkdown(markdown: string) {
@@ -257,54 +361,76 @@ export async function getApiDueCards(): Promise<ICard[]> {
   }
 }
 
-export async function getSqlCards(): Promise<ICard[]> {
+export async function getSqlCards(): Promise<{
+  cards: ICard[]
+  reliable: boolean
+}> {
   try {
-    const rows = await sql('select id as cardID, block_id as blockID, deck_id as deckID from cards')
-    return (rows || []).map((row: Record<string, any>) => {
-      const blockID = String(row.blockID || row.blockid || row.block_id || '')
-      const rawCardID = String(row.cardID || row.cardid || row.id || '')
-      return {
-        cardID: normalizeCardIdentity(rawCardID, blockID),
-        blockID,
-        deckID: String(row.deckID || row.deckid || row.deck_id || ''),
-      }
-    }).filter((item: ICard) => item.blockID)
+    const result = await querySqlInPages<Record<string, any>>((offset, limit) => `
+      select id as cardID, block_id as blockID, deck_id as deckID
+      from cards
+      order by id
+      limit ${limit} offset ${offset}
+    `)
+
+    return {
+      cards: result.rows.map((row: Record<string, any>) => {
+        const blockID = String(row.blockID || row.blockid || row.block_id || '')
+        const rawCardID = String(row.cardID || row.cardid || row.id || '')
+        return {
+          cardID: normalizeCardIdentity(rawCardID, blockID),
+          blockID,
+          deckID: String(row.deckID || row.deckid || row.deck_id || ''),
+        }
+      }).filter((item: ICard) => item.blockID),
+      reliable: result.reliable,
+    }
   } catch {
-    return []
+    return {
+      cards: [],
+      reliable: false,
+    }
   }
 }
 
-export async function scanFlashcardBlocks(): Promise<ICard[]> {
+export async function scanFlashcardBlocks(): Promise<{
+  cards: ICard[]
+  reliable: boolean
+}> {
   try {
-    const rows = await sql(`
+    const result = await querySqlInPages<Record<string, any>>((offset, limit) => `
       select id as blockID
       from blocks
       where ial like '${FLASHCARD_BLOCK_IAL_PATTERN}'
          or ial like '${LEGACY_FLASHCARD_BLOCK_IAL_PATTERN}'
-      order by updated desc
+      order by updated desc, id desc
+      limit ${limit} offset ${offset}
     `)
 
-    return (rows || []).map((row: Record<string, any>) => {
-      const blockID = String(row.blockID || row.blockid || row.id || '').trim()
-      if (!blockID) {
-        return null
-      }
-      return {
-        cardID: toSyntheticCardId(blockID),
-        blockID,
-        deckID: '',
-      }
-    }).filter((item: ICard | null): item is ICard => Boolean(item))
+    return {
+      cards: result.rows.map((row: Record<string, any>) => {
+        const blockID = String(row.blockID || row.blockid || row.id || '').trim()
+        if (!blockID) {
+          return null
+        }
+        return {
+          cardID: toSyntheticCardId(blockID),
+          blockID,
+          deckID: '',
+        }
+      }).filter((item: ICard | null): item is ICard => Boolean(item)),
+      reliable: result.reliable,
+    }
   } catch {
-    return []
+    return {
+      cards: [],
+      reliable: false,
+    }
   }
 }
 
 export async function getCardDiagnostics(): Promise<CardDiagnostics> {
-  const cachedCount = getCachedCards().length
-  const apiCards = await getApiCards()
-  const dueCards = await getApiDueCards()
-  const blockScannedCards = await scanFlashcardBlocks()
+  const snapshot = await getCardSourceSnapshot()
 
   let tableNames: string[] = []
   try {
@@ -322,52 +448,58 @@ export async function getCardDiagnostics(): Promise<CardDiagnostics> {
     cardColumns = []
   }
 
-  const sqlCards = await getSqlCards()
-
   return {
-    cachedCount,
-    sqlCount: sqlCards.length,
-    apiCount: apiCards.length,
-    dueCount: dueCards.length,
-    blockScanCount: blockScannedCards.length,
+    cachedCount: snapshot.cachedCards.length,
+    sqlCount: snapshot.sqlCards.length,
+    apiCount: snapshot.apiCards.length,
+    dueCount: snapshot.dueCards.length,
+    blockScanCount: snapshot.blockScannedCards.length,
     tableNames,
     cardColumns,
   }
 }
 
 export async function getAvailableCards(): Promise<ICard[]> {
-  const cached = getCachedCards()
-  if (cached.length > 0) {
-    return cached.map(item => ({
-      ...item,
-      cardID: normalizeCardIdentity(String(item.cardID || ''), String(item.blockID || '')),
-    }))
-  }
-
-  const apiCards = await getApiCards()
-  if (apiCards.length > 0) {
-    return apiCards
-  }
-
-  const blockScannedCards = await scanFlashcardBlocks()
-  if (blockScannedCards.length > 0) {
-    return blockScannedCards
-  }
-
-  return await getSqlCards()
+  const snapshot = await getCardSourceSnapshot()
+  return snapshot.mergedCards
 }
 
 export async function getDueAvailableCards(): Promise<ICard[]> {
-  const apiDueCards = await getApiDueCards()
-  if (apiDueCards.length > 0) {
-    return apiDueCards
-  }
-
-  return await getAvailableCards()
+  const snapshot = await getCardSourceSnapshot()
+  return mergeCardLists(snapshot.dueCards, snapshot.mergedCards)
 }
 
 function getCandidateTag(cardId: string) {
   return `siyuan-card:${cardId}`
+}
+
+function findMappingForCandidate(candidate: FlashcardCandidate, mappings: AnkiLinkerMapping[]) {
+  const candidateCardId = String(candidate.cardId || '').trim()
+  const candidateBlockId = String(candidate.blockId || '').trim()
+
+  return mappings.find(mapping => {
+    const mappingCardId = String(mapping.siyuanCardId || '').trim()
+    const mappingBlockId = String(mapping.siyuanBlockId || '').trim()
+    return (candidateCardId && mappingCardId === candidateCardId)
+      || (candidateBlockId && mappingBlockId === candidateBlockId)
+  })
+}
+
+function findCandidateForMapping(mapping: AnkiLinkerMapping, candidates: FlashcardCandidate[]) {
+  const mappingCardId = String(mapping.siyuanCardId || '').trim()
+  const mappingBlockId = String(mapping.siyuanBlockId || '').trim()
+
+  return candidates.find(candidate => {
+    const candidateCardId = String(candidate.cardId || '').trim()
+    const candidateBlockId = String(candidate.blockId || '').trim()
+    return (mappingCardId && candidateCardId === mappingCardId)
+      || (mappingBlockId && candidateBlockId === candidateBlockId)
+  })
+}
+
+function canSafelyDeleteMappings(snapshot: CardSourceSnapshot) {
+  return (snapshot.sqlCardsReliable && snapshot.sqlCards.length > 0)
+    || (snapshot.blockScanReliable && snapshot.blockScannedCards.length > 0)
 }
 
 async function hydrateMappingsFromAnki(
@@ -375,7 +507,7 @@ async function hydrateMappingsFromAnki(
   candidates: FlashcardCandidate[],
   mappings: AnkiLinkerMapping[],
 ): Promise<AnkiLinkerMapping[]> {
-  const unresolvedCandidates = candidates.filter(candidate => !mappings.some(mapping => mapping.siyuanCardId === candidate.cardId))
+  const unresolvedCandidates = candidates.filter(candidate => !findMappingForCandidate(candidate, mappings))
   if (unresolvedCandidates.length === 0) {
     return mappings
   }
@@ -398,10 +530,9 @@ async function hydrateMappingsFromAnki(
     }
 
     const recoveredMappings: AnkiLinkerMapping[] = [...mappings]
-    const knownCardIds = new Set(mappings.map(item => item.siyuanCardId))
     for (const candidate of unresolvedCandidates) {
       const noteId = mappingByTag.get(getCandidateTag(candidate.cardId))
-      if (!noteId || knownCardIds.has(candidate.cardId)) {
+      if (!noteId || findMappingForCandidate(candidate, recoveredMappings)) {
         continue
       }
       recoveredMappings.push({
@@ -416,7 +547,6 @@ async function hydrateMappingsFromAnki(
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       })
-      knownCardIds.add(candidate.cardId)
     }
 
     return recoveredMappings
@@ -520,17 +650,18 @@ export async function buildSyncPreview(
   settings: AnkiLinkerSettings,
   mappings: AnkiLinkerMapping[],
 ): Promise<SyncPreviewResult> {
-  const cards = await getAvailableCards()
-  const candidates = await collectFlashcardCandidates(cards, settings)
+  const snapshot = await getCardSourceSnapshot()
+  const candidates = await collectFlashcardCandidates(snapshot.mergedCards, settings)
   const hydratedMappings = await hydrateMappingsFromAnki(settings, candidates, mappings)
-  const candidateMap = new Map(candidates.map(item => [item.cardId, item]))
-  const mappingMap = new Map(hydratedMappings.map(item => [item.siyuanCardId, item]))
+  const allowDeletion = canSafelyDeleteMappings(snapshot)
 
   const added: FlashcardCandidate[] = []
   const updated: FlashcardCandidate[] = []
   const unchanged: FlashcardCandidate[] = []
   const invalid: FlashcardCandidate[] = []
-  const deleted = hydratedMappings.filter(item => !candidateMap.has(item.siyuanCardId))
+  const deleted = allowDeletion
+    ? hydratedMappings.filter(item => !findCandidateForMapping(item, candidates))
+    : []
 
   for (const candidate of candidates) {
     if (!candidate.isValid) {
@@ -538,7 +669,7 @@ export async function buildSyncPreview(
       continue
     }
 
-    const mapping = mappingMap.get(candidate.cardId)
+    const mapping = findMappingForCandidate(candidate, hydratedMappings)
     if (!mapping) {
       added.push(candidate)
       continue
@@ -652,7 +783,6 @@ export async function runSync(
   const preview = await buildSyncPreview(settings, mappings)
   const client = createAnkiClient(settings.ankiUrl)
   const rebuiltMappings = await hydrateMappingsFromAnki(settings, [...preview.added, ...preview.updated, ...preview.unchanged, ...preview.invalid], mappings)
-  const mappingByCardId = new Map(rebuiltMappings.map(item => [item.siyuanCardId, item]))
   const nextMappings = new Map(rebuiltMappings.map(item => [item.siyuanCardId, item]))
 
   if (preview.deleted.length > 0) {
@@ -667,7 +797,7 @@ export async function runSync(
     const recreateItems: FlashcardCandidate[] = []
 
     await Promise.all(preview.updated.map(async (item) => {
-      const mapping = mappingByCardId.get(item.cardId)
+      const mapping = findMappingForCandidate(item, rebuiltMappings)
       if (!mapping) {
         recreateItems.push(item)
         return
@@ -678,6 +808,9 @@ export async function runSync(
           id: mapping.ankiNoteId,
           fields: buildAnkiFields(item, settings),
         })
+        if (mapping.siyuanCardId !== item.cardId) {
+          nextMappings.delete(mapping.siyuanCardId)
+        }
         nextMappings.set(item.cardId, {
           ...mapping,
           siyuanCardId: item.cardId,
@@ -693,7 +826,7 @@ export async function runSync(
         if (!isAnkiNoteNotFoundError(error)) {
           throw error
         }
-        nextMappings.delete(item.cardId)
+        nextMappings.delete(mapping.siyuanCardId)
         recreateItems.push(item)
       }
     }))
@@ -711,7 +844,7 @@ export async function runSync(
         if (!noteId) {
           throw new Error(`重建 Anki 笔记失败，card ID: ${item.cardId}`)
         }
-        const previousMapping = mappingByCardId.get(item.cardId)
+        const previousMapping = findMappingForCandidate(item, rebuiltMappings)
         nextMappings.set(item.cardId, {
           siyuanCardId: item.cardId,
           siyuanDeckId: item.deckId,
