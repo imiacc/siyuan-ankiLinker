@@ -96,9 +96,13 @@
                     <div class="path-rule-summary-cell path-rule-summary-cell--deck" :title="rule.deckName || settings.deckName">
                       {{ rule.deckName || settings.deckName }}
                     </div>
-                    <div class="path-rule-summary-actions">
-                      <SyButton class="path-rule-action-button" type="button" @click="startEditPathRule(index)">{{ locale.edit }}</SyButton>
-                      <SyButton class="path-rule-action-button" type="button" @click="removePathRule(index)">{{ locale.remove }}</SyButton>
+                                        <div class="path-rule-summary-actions">
+                      <SyButton class="icon-button path-rule-action-button" type="button" :title="locale.edit" @click="startEditPathRule(index)">
+                        <svg aria-hidden="true"><use xlink:href="#iconEdit" /></svg>
+                      </SyButton>
+                      <SyButton class="icon-button path-rule-action-button" type="button" :title="locale.remove" @click="removePathRule(index)">
+                        <svg aria-hidden="true"><use xlink:href="#iconTrash" /></svg>
+                      </SyButton>
                     </div>
                   </div>
                 </template>
@@ -1293,7 +1297,7 @@ onUnmounted(() => {
 }
 
 .path-rule-action-button {
-  min-width: 56px;
+  flex: 0 0 auto;
 }
 
 .icon-button {
@@ -1304,6 +1308,11 @@ onUnmounted(() => {
   font-size: 14px;
   line-height: 1;
   border-radius: 8px;
+}
+
+.icon-button svg {
+  width: 14px;
+  height: 14px;
 }
 
 .preview-list li,
@@ -1461,13 +1470,13 @@ onUnmounted(() => {
     gap: 6px;
   }
 
-  .path-rule-summary-actions {
+    .path-rule-summary-actions {
     justify-content: flex-start;
     width: 100%;
   }
 
   .path-rule-action-button {
-    flex: 1;
+    flex: 0 0 auto;
   }
 }
 </style>
