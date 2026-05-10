@@ -100,8 +100,8 @@
                       <SyButton class="icon-button path-rule-action-button" type="button" :title="locale.edit" @click="startEditPathRule(index)">
                         <svg aria-hidden="true"><use xlink:href="#iconEdit" /></svg>
                       </SyButton>
-                      <SyButton class="icon-button path-rule-action-button" type="button" :title="locale.remove" @click="removePathRule(index)">
-                        <svg aria-hidden="true"><use xlink:href="#iconTrash" /></svg>
+                                            <SyButton class="icon-button path-rule-action-button" type="button" :title="locale.remove" @click="removePathRule(index)">
+                        🗑
                       </SyButton>
                     </div>
                   </div>
@@ -751,12 +751,11 @@ const refreshDeletionDiagnostics = async () => {
     deletionDiagnostics.value = await buildDeletionDiagnostics(settings, mappings.value)
     const matchedCount = deletionDiagnostics.value.matchedCount
     const orphanCount = deletionDiagnostics.value.orphanCount
-    addLog(`删除判定诊断完成：允许删除 ${deletionDiagnostics.value.allowDeletion ? '是' : '否'}；命中 ${matchedCount} 条；孤儿映射 ${orphanCount} 条`)
+    addLog(`Deletion diagnostics updated: allowDeletion=${deletionDiagnostics.value.allowDeletion ? 'Yes' : 'No'}; matched=${matchedCount}; orphanMappings=${orphanCount}`)
   } catch (error) {
-    addLog(`删除判定诊断失败：${String(error)}`)
+    addLog(`Deletion diagnostics failed: ${String(error)}`)
   }
 }
-
 const refreshCardStats = async () => {
   const available = await getAvailableCards()
   const detail = await getCardDiagnostics()
