@@ -10,6 +10,8 @@
   "localAnkiConnect": "Local AnkiConnect",
   "collapse": "Collapse",
   "expand": "Expand",
+  "edit": "Edit",
+  "done": "Done",
   "ankiConnectUrl": "AnkiConnect URL",
   "defaultDeck": "Default Target Deck",
   "qaNoteType": "QA Note Type",

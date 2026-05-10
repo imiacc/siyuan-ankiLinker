@@ -10,6 +10,8 @@
   "localAnkiConnect": "本地 AnkiConnect",
   "collapse": "收起",
   "expand": "展开",
+  "edit": "编辑",
+  "done": "完成",
   "ankiConnectUrl": "AnkiConnect 地址",
   "defaultDeck": "默认目标卡组",
   "qaNoteType": "问答卡模板",

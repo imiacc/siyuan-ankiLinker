@@ -1,7 +1,7 @@
 <template>
   <div class="siyuan-anki-linker-app-shell">
     <div class="siyuan-anki-linker-shell">
-      <header class="hero">
+      <header class="hero hero--top-actions-right">
         <div>
           <p class="eyebrow">{{ locale.heroEyebrow }}</p>
           <h1>{{ locale.panelTitle }}</h1>
@@ -19,7 +19,13 @@
         <article class="panel">
           <div class="panel-header">
             <h2>{{ locale.localAnkiConnect }}</h2>
-            <SyButton @click="showAnkiConfig = !showAnkiConfig">{{ showAnkiConfig ? locale.collapse : locale.expand }}</SyButton>
+            <SyButton
+              class="icon-button"
+              :title="showAnkiConfig ? locale.collapse : locale.expand"
+              @click="showAnkiConfig = !showAnkiConfig"
+            >
+              {{ showAnkiConfig ? '●' : '▸' }}
+            </SyButton>
           </div>
 
           <div v-if="showAnkiConfig" class="compact-form">
@@ -55,43 +61,71 @@
         <article class="panel">
           <div class="panel-header">
             <h2>{{ locale.pathDeckRouting }}</h2>
-            <div class="button-row">
-              <SyButton @click="showPathRules = !showPathRules">{{ showPathRules ? locale.collapse : locale.expand }}</SyButton>
-              <SyButton @click="refreshPathOptions">{{ locale.refreshPath }}</SyButton>
+            <div class="button-row button-row--compact">
+              <SyButton
+                class="icon-button"
+                :title="showPathRules ? locale.collapse : locale.expand"
+                @click="showPathRules = !showPathRules"
+              >
+                {{ showPathRules ? '●' : '▸' }}
+              </SyButton>
+              <SyButton class="icon-button" :title="locale.refreshPath" @click="refreshPathOptions">↻</SyButton>
             </div>
           </div>
           <p class="meta">{{ locale.pathRuleHint }}</p>
           <div v-if="showPathRules" class="path-rule-section">
             <div class="path-rule-list path-rule-list--scrollable">
               <div v-for="(rule, index) in settings.pathDeckRules" :key="`rule-${index}`" class="path-rule-item path-rule-item--column">
-                <div class="path-current-box">
-                  <div class="path-current-label">{{ locale.currentPath }}</div>
-                  <div class="path-current-value">{{ rule.path || locale.notSelected }}</div>
-                </div>
-                <div class="path-input-stack">
-                  <SyInput
-                    v-model="rulePathSearchStates[index].keyword"
-                    :placeholder="locale.pathSearchPlaceholder"
-                    @input="onRulePathInput(index)"
-                  />
-                  <SySelect
-                    :model-value="rulePathSearchStates[index].selectedPath"
-                    :options="getRuleSearchOptions(index)"
-                    @update:model-value="onRuleSearchSelect(index, $event)"
-                  />
-                </div>
-                <div class="path-rule-actions">
-                  <div class="button-row">
-                    <SyButton @click="stepBackRulePath(index)">{{ locale.stepBack }}</SyButton>
-                    <SyButton @click="clearRulePath(index)">{{ locale.clearPath }}</SyButton>
+                <template v-if="!ruleEditStates[index]">
+                  <div class="path-rule-summary-row">
+                    <div class="path-rule-summary-grid">
+                      <div class="path-rule-summary-cell path-rule-summary-cell--path" :title="rule.path || locale.notSelected">
+                        {{ rule.path || locale.notSelected }}
+                      </div>
+                      <div class="path-rule-summary-arrow">-&gt;</div>
+                      <div class="path-rule-summary-cell" :title="rule.deckName || settings.deckName">
+                        {{ rule.deckName || settings.deckName }}
+                      </div>
+                    </div>
+                    <div class="button-row button-row--compact button-row--nowrap">
+                      <SyButton class="icon-button" :title="locale.edit" @click="startEditPathRule(index)">✎</SyButton>
+                      <SyButton class="icon-button" :title="locale.remove" @click="removePathRule(index)">🗑</SyButton>
+                    </div>
                   </div>
-                  <SySelect v-model="rule.deckName" :options="deckOptions" />
-                  <SyButton @click="removePathRule(index)">{{ locale.remove }}</SyButton>
-                </div>
+                </template>
+                <template v-else>
+                  <div class="path-current-box">
+                    <div class="path-current-label">{{ locale.currentPath }}</div>
+                    <div class="path-current-value">{{ rule.path || locale.notSelected }}</div>
+                  </div>
+                  <div class="path-input-stack">
+                    <SyInput
+                      v-model="rulePathSearchStates[index].keyword"
+                      :placeholder="locale.pathSearchPlaceholder"
+                      @input="onRulePathInput(index)"
+                    />
+                    <SySelect
+                      :model-value="rulePathSearchStates[index].selectedPath"
+                      :options="getRuleSearchOptions(index)"
+                      @update:model-value="onRuleSearchSelect(index, $event)"
+                    />
+                  </div>
+                  <div class="path-rule-actions">
+                    <div class="button-row button-row--compact button-row--nowrap">
+                      <SyButton class="icon-button" :title="locale.stepBack" @click="stepBackRulePath(index)">↑</SyButton>
+                      <SyButton class="icon-button" :title="locale.clearPath" @click="clearRulePath(index)">↺</SyButton>
+                    </div>
+                    <SySelect v-model="rule.deckName" :options="deckOptions" />
+                    <div class="button-row button-row--compact button-row--nowrap button-row--align-end">
+                      <SyButton class="icon-button" :title="locale.done" @click="finishEditPathRule(index)">✓</SyButton>
+                      <SyButton class="icon-button" :title="locale.remove" @click="removePathRule(index)">🗑</SyButton>
+                    </div>
+                  </div>
+                </template>
               </div>
             </div>
-            <div class="button-row">
-              <SyButton @click="addPathRule">{{ locale.addPathRule }}</SyButton>
+            <div class="button-row button-row--compact">
+              <SyButton class="icon-button" :title="locale.addPathRule" @click="addPathRule">＋</SyButton>
             </div>
             <p class="meta">{{ locale.pathRuleFooter }}</p>
           </div>
@@ -100,7 +134,14 @@
 
       <section class="panel-grid panel-grid--two">
         <article class="panel">
-          <h2>{{ locale.flashcardStatus }}</h2>
+          <div class="panel-header panel-header--section-actions">
+            <h2>{{ locale.flashcardStatus }}</h2>
+            <div class="button-row button-row--compact button-row--nowrap">
+              <SyButton class="icon-button" :title="locale.refreshCardStats" @click="refreshCardStats">↻</SyButton>
+              <SyButton class="icon-button" :title="locale.cleanupMappings" @click="cleanupMappings">⌫</SyButton>
+              <SyButton class="icon-button" :title="showDiagnostics ? locale.hideDiagnostics : locale.showDiagnostics" @click="showDiagnostics = !showDiagnostics">{{ showDiagnostics ? '●' : '▸' }}</SyButton>
+            </div>
+          </div>
           <p class="meta">{{ locale.flashcardStatusHint }}</p>
           <div class="stats-grid">
             <div class="stat-card">
@@ -111,11 +152,6 @@
               <span class="stat-value">{{ mappingCount }}</span>
               <span class="stat-label">{{ locale.existingMappings }}</span>
             </div>
-          </div>
-          <div class="button-row">
-            <SyButton @click="refreshCardStats">{{ locale.refreshCardStats }}</SyButton>
-            <SyButton @click="cleanupMappings">{{ locale.cleanupMappings }}</SyButton>
-            <SyButton @click="showDiagnostics = !showDiagnostics">{{ showDiagnostics ? locale.hideDiagnostics : locale.showDiagnostics }}</SyButton>
           </div>
           <div v-if="showDiagnostics" class="diagnostic-box">
             <p class="meta">{{ locale.cachedEvents }}：{{ diagnostics.cachedCount }} {{ locale.cardUnit }}</p>
@@ -129,10 +165,12 @@
         </article>
 
         <article class="panel">
-          <h2>{{ locale.syncPreview }}</h2>
-          <div class="button-row">
-            <SyButton @click="previewSync">{{ locale.generatePreview }}</SyButton>
-            <SyButton @click="syncToAnki">{{ locale.runSync }}</SyButton>
+          <div class="panel-header panel-header--section-actions">
+            <h2>{{ locale.syncPreview }}</h2>
+            <div class="button-row button-row--compact button-row--nowrap">
+              <SyButton class="icon-button" :title="locale.generatePreview" @click="previewSync">⌕</SyButton>
+              <SyButton class="icon-button" :title="locale.runSync" @click="syncToAnki">⇄</SyButton>
+            </div>
           </div>
           <div class="stats-grid stats-grid--compact">
             <div class="stat-card"><span class="stat-value">{{ previewSummary.added }}</span><span class="stat-label">{{ locale.added }}</span></div>
@@ -147,8 +185,8 @@
         <article class="panel">
           <div class="log-header">
             <h2>{{ locale.previewDetails }}</h2>
-            <div class="button-row">
-              <SyButton @click="showPreviewDetails = !showPreviewDetails">{{ showPreviewDetails ? locale.collapseDetails : locale.expandDetails }}</SyButton>
+            <div class="button-row button-row--compact">
+              <SyButton class="icon-button" :title="showPreviewDetails ? locale.collapseDetails : locale.expandDetails" @click="showPreviewDetails = !showPreviewDetails">{{ showPreviewDetails ? '●' : '▸' }}</SyButton>
             </div>
           </div>
           <ul v-if="showPreviewDetails" class="preview-list preview-list--scrollable">
@@ -164,9 +202,9 @@
       <section class="panel log-panel">
         <div class="log-header">
           <h2>{{ locale.syncLogs }}</h2>
-          <div class="button-row">
-            <SyButton @click="showLogs = !showLogs">{{ showLogs ? locale.collapseLogs : locale.expandLogs }}</SyButton>
-            <SyButton @click="clearLogs">{{ locale.clearLogs }}</SyButton>
+          <div class="button-row button-row--compact">
+            <SyButton class="icon-button" :title="showLogs ? locale.collapseLogs : locale.expandLogs" @click="showLogs = !showLogs">{{ showLogs ? '●' : '▸' }}</SyButton>
+            <SyButton class="icon-button" :title="locale.clearLogs" @click="clearLogs">⌫</SyButton>
           </div>
         </div>
         <ul v-if="showLogs" class="log-list">
@@ -230,6 +268,8 @@ const locale = reactive({
   localAnkiConnect: plugin.i18n.localAnkiConnect || 'Local AnkiConnect',
   collapse: plugin.i18n.collapse || 'Collapse',
   expand: plugin.i18n.expand || 'Expand',
+  edit: plugin.i18n.edit || 'Edit',
+  done: plugin.i18n.done || 'Done',
   ankiConnectUrl: plugin.i18n.ankiConnectUrl || 'AnkiConnect URL',
   defaultDeck: plugin.i18n.defaultDeck || 'Default Target Deck',
   qaNoteType: plugin.i18n.qaNoteType || 'QA Note Type',
@@ -292,6 +332,7 @@ const clozeFieldOptions = ref<SelectOption[]>([{ value: 'Text', text: 'Text' }, 
 const pathSearchOptions = ref<SelectOption[]>([])
 const pathTreeRoots = ref<PathTreeNode[]>([])
 const rulePathSearchStates = ref<PathSearchState[]>([])
+const ruleEditStates = ref<boolean[]>([])
 const logs = ref<SyncLogItem[]>([])
 const showLogs = ref(false)
 const showDiagnostics = ref(false)
@@ -385,6 +426,7 @@ function syncRuleSearchStates() {
     selectedPath: String(rule.path || ''),
     basePath: rulePathSearchStates.value[index]?.basePath || String(rule.path || ''),
   }))
+  ruleEditStates.value = settings.pathDeckRules.map((_, index) => ruleEditStates.value[index] ?? true)
 }
 
 function getChildOptionsByBasePath(basePath: string) {
@@ -548,12 +590,22 @@ const refreshPathOptions = async () => {
 const addPathRule = () => {
   settings.pathDeckRules.push({ path: '', deckName: settings.deckName } satisfies PathDeckRule)
   rulePathSearchStates.value.push({ keyword: '', selectedPath: '', basePath: '' })
+  ruleEditStates.value.push(true)
   showPathRules.value = true
+}
+
+const startEditPathRule = (index: number) => {
+  ruleEditStates.value[index] = true
+}
+
+const finishEditPathRule = (index: number) => {
+  ruleEditStates.value[index] = false
 }
 
 const removePathRule = (index: number) => {
   settings.pathDeckRules.splice(index, 1)
   rulePathSearchStates.value.splice(index, 1)
+  ruleEditStates.value.splice(index, 1)
 }
 
 const cleanupMappings = async () => {
@@ -821,6 +873,11 @@ onUnmounted(() => {
   align-items: flex-start;
 }
 
+.hero--top-actions-right .hero-actions {
+  margin-left: auto;
+  justify-content: flex-end;
+}
+
 .hero h1,
 .panel h2,
 .eyebrow,
@@ -858,9 +915,25 @@ onUnmounted(() => {
   flex-wrap: wrap;
 }
 
+.button-row--compact {
+  gap: 8px;
+}
+
+.button-row--nowrap {
+  flex-wrap: nowrap;
+}
+
+.button-row--align-end {
+  justify-content: flex-end;
+}
+
 .panel-header {
   justify-content: space-between;
   align-items: center;
+}
+
+.panel-header--section-actions {
+  gap: 12px;
 }
 
 .compact-form {
@@ -979,6 +1052,55 @@ onUnmounted(() => {
 .path-rule-actions {
   align-items: center;
   justify-content: space-between;
+  gap: 10px;
+}
+
+.path-rule-actions > :nth-child(2) {
+  flex: 1;
+  min-width: 180px;
+}
+
+.path-rule-summary-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.path-rule-summary-grid {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(140px, 220px);
+  align-items: center;
+  gap: 8px;
+}
+
+.path-rule-summary-cell {
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  white-space: nowrap;
+  padding-bottom: 2px;
+  scrollbar-width: thin;
+}
+
+.path-rule-summary-cell--path {
+  text-align: left;
+}
+
+.path-rule-summary-arrow {
+  color: var(--b3-theme-on-surface-light);
+  font-size: 12px;
+}
+
+.icon-button {
+  min-width: 30px;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  font-size: 14px;
+  line-height: 1;
+  border-radius: 8px;
 }
 
 .preview-list li,
@@ -1042,7 +1164,8 @@ onUnmounted(() => {
   .log-panel li,
   .path-rule-item,
   .panel-header,
-  .path-rule-actions {
+  .path-rule-actions,
+  .path-rule-summary-row {
     flex-direction: column;
     align-items: stretch;
   }
@@ -1050,6 +1173,17 @@ onUnmounted(() => {
   .path-rule-actions {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .path-rule-summary-row,
+  .path-rule-summary-grid {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .path-rule-summary-arrow {
+    text-align: center;
   }
 }
 </style>
