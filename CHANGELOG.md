@@ -2,8 +2,12 @@
 
 ## 0.1.3
 
+- 优化“本地 AnkiConnect”配置区表单布局，使左侧字段标签与右侧下拉/输入控件纵向对齐，提升界面美观度。
+- 新增对 `Esc` 键的响应：面板打开时可直接按 `Esc` 关闭插件面板。
+- 将插件中文显示名称由“思源 Anki 同步器”调整为“思源 Anki 同步工具”。
 - 删除 `plugin.json` 中空的 `funding` 字段。
 - 删除与 `default` 完全重复的 `displayName.en_US` 与 `description.en_US`，消除冗余 locale 配置。
+
 
 ## 0.1.2
 

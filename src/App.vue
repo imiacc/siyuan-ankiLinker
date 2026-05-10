@@ -185,7 +185,7 @@ import SyButton from '@/components/SiyuanTheme/SyButton.vue'
 import SyInput from '@/components/SiyuanTheme/SyInput.vue'
 import SySelect from '@/components/SiyuanTheme/SySelect.vue'
 import { getHPathByPath, lsNotebooks, listDocsByPath } from '@/api'
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { hidePanel, usePlugin } from '@/main'
 import { createAnkiClient } from '@/utils/anki'
 import { buildSyncPreview, cleanupInvalidMappings, getAvailableCards, getCardDiagnostics, runSync } from '@/utils/sync'
@@ -619,6 +619,19 @@ const closePanel = () => {
   hidePanel()
 }
 
+const handleEscapeKey = (event: KeyboardEvent) => {
+  if (event.key !== 'Escape') {
+    return
+  }
+
+  const appShell = document.getElementById('siyuan-anki-linker-app')
+  if (!appShell || appShell.classList.contains('fn__none')) {
+    return
+  }
+
+  closePanel()
+}
+
 const detectConnection = async () => {
   try {
     const client = createAnkiClient(settings.ankiUrl)
@@ -695,10 +708,15 @@ watch(() => settings.clozeNoteType, async () => { await refreshModelFields() })
 
 onMounted(async () => {
   window[PLUGIN_RUNTIME_KEY] = { closePanel }
+  window.addEventListener('keydown', handleEscapeKey)
   await loadState()
   await refreshCardStats()
   await refreshRemoteMeta()
   await refreshPathOptions()
+})
+
+onUnmounted(() => {
+  window.removeEventListener('keydown', handleEscapeKey)
 })
 </script>
 
@@ -762,6 +780,7 @@ onMounted(async () => {
 .field-label {
   font-size: 13px;
   color: var(--b3-theme-on-surface-light);
+  line-height: 1.5;
 }
 
 .hero-actions,
@@ -779,7 +798,13 @@ onMounted(async () => {
   align-items: center;
 }
 
-.compact-form,
+.compact-form {
+  display: grid;
+  grid-template-columns: minmax(132px, max-content) minmax(0, 1fr);
+  gap: 10px 12px;
+  align-items: center;
+}
+
 .panel,
 .path-rule-section {
   display: flex;
@@ -940,6 +965,10 @@ onMounted(async () => {
 @media (max-width: 768px) {
   .siyuan-anki-linker-shell {
     width: calc(100vw - 20px);
+  }
+
+  .compact-form {
+    grid-template-columns: 1fr;
   }
 
   .log-header,
