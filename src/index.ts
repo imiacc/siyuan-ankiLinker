@@ -3,26 +3,34 @@ import {
   getFrontend,
 } from "siyuan";
 import "@/index.scss";
-import PluginInfoString from '@/../plugin.json'
-import { destroy, init, showPanel } from '@/main'
-import { getFile, removeFile } from '@/api'
-import topbarIcon from '@/../asset/topbar-icon.svg?raw'
+import PluginInfoString from "@/../plugin.json"
+import { destroy, init, showPanel } from "@/main"
+import { getFile, removeFile } from "@/api"
+import topbarIcon from "@/../asset/topbar-icon.svg?raw"
 
-const TOPBAR_ICON_NAME = 'iconSiyuanAnkiLinker'
-const LEGACY_PLUGIN_ID = 'ankiLinker'
-const PLUGIN_RUNTIME_KEY = '_sy_siyuan_ankiLinker'
-const SETTINGS_STORAGE_KEY = 'settings.json'
-const MAPPINGS_STORAGE_KEY = 'mappings.json'
-const LEGACY_STORAGE_KEY = 'ankilinker-state.json'
+const TOPBAR_ICON_NAME = "iconSiyuanAnkiLinker"
+const LEGACY_PLUGIN_ID = "ankiLinker"
+const PLUGIN_RUNTIME_KEY = "_sy_siyuan_ankiLinker"
+const SETTINGS_STORAGE_KEY = "settings.json"
+const MAPPINGS_STORAGE_KEY = "mappings.json"
+const LEGACY_STORAGE_KEY = "ankilinker-state.json"
 const STORAGE_KEYS = [SETTINGS_STORAGE_KEY, MAPPINGS_STORAGE_KEY, LEGACY_STORAGE_KEY] as const
+const DEFAULT_TOPBAR_TITLE = "Anki Linker"
+const DEFAULT_PANEL_TITLE = "Anki Linker"
+const DEFAULT_PANEL_SUBTITLE = "Sync SiYuan flashcards to local Anki via AnkiConnect"
 
 type CardUpdateOptions = {
-
   cards?: unknown[]
 }
 
+type PluginLocaleStrings = {
+  topbarTitle: string
+  panelTitle: string
+  panelSubtitle: string
+}
+
 let PluginInfo = {
-  version: '',
+  version: "",
 }
 try {
   PluginInfo = PluginInfoString
@@ -46,14 +54,14 @@ export default class SiyuanAnkiLinkerPlugin extends Plugin {
   async onload() {
     const frontEnd = getFrontend()
     this.platform = frontEnd as SyFrontendTypes
-    this.isMobile = frontEnd === 'mobile' || frontEnd === 'browser-mobile'
-    this.isBrowser = frontEnd.includes('browser')
-    this.isLocal = location.href.includes('127.0.0.1') || location.href.includes('localhost')
-    this.isInWindow = location.href.includes('window.html')
+    this.isMobile = frontEnd === "mobile" || frontEnd === "browser-mobile"
+    this.isBrowser = frontEnd.includes("browser")
+    this.isLocal = location.href.includes("127.0.0.1") || location.href.includes("localhost")
+    this.isInWindow = location.href.includes("window.html")
 
     try {
-      require('@electron/remote')
-        .require('@electron/remote/main')
+      require("@electron/remote")
+        .require("@electron/remote/main")
       this.isElectron = true
     } catch {
       this.isElectron = false
@@ -65,8 +73,8 @@ export default class SiyuanAnkiLinkerPlugin extends Plugin {
 
     this.addTopBar({
       icon: TOPBAR_ICON_NAME,
-      title: 'siyuan-ankiLinker',
-      position: 'right',
+      title: this.i18n.topbarTitle || DEFAULT_TOPBAR_TITLE,
+      position: "right",
       callback: () => {
         showPanel()
       },
@@ -102,8 +110,15 @@ export default class SiyuanAnkiLinkerPlugin extends Plugin {
   }
 }
 
-function cleanupRuntimeState() {
+export function getPluginI18n(plugin: Plugin): PluginLocaleStrings {
+  return {
+    topbarTitle: plugin.i18n.topbarTitle || DEFAULT_TOPBAR_TITLE,
+    panelTitle: plugin.i18n.panelTitle || DEFAULT_PANEL_TITLE,
+    panelSubtitle: plugin.i18n.panelSubtitle || DEFAULT_PANEL_SUBTITLE,
+  }
+}
 
+function cleanupRuntimeState() {
   if (window[PLUGIN_RUNTIME_KEY]) {
     delete window[PLUGIN_RUNTIME_KEY]
   }
@@ -147,19 +162,17 @@ async function migrateLegacyStorageIfNeeded(plugin: Plugin) {
       return
     }
 
-        await Promise.all(writeTasks)
-
+    await Promise.all(writeTasks)
   } catch {
     // ignore legacy migration failures
   }
 }
 
 function parseLegacyStorageContent(raw: unknown) {
-
   if (raw == null) {
     return null
   }
-  if (typeof raw === 'string') {
+  if (typeof raw === "string") {
     const text = raw.trim()
     if (!text) {
       return null
@@ -175,10 +188,7 @@ function parseLegacyStorageContent(raw: unknown) {
 
 function extractSvgBody(svg: string) {
   return svg
-
-    .replace(/^[\s\S]*?<svg[^>]*>/i, '')
-    .replace(/<\/svg>\s*$/i, '')
+    .replace(/^[\s\S]*?<svg[^>]*>/i, "")
+    .replace(/<\/svg>\s*$/i, "")
 }
-
-
 

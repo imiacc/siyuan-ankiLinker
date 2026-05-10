@@ -12,7 +12,7 @@
     "all"
   ],
   "displayName": {
-    "default": "siyuan-ankiLinker",
+    "default": "Anki Linker",
     "zh_CN": "思源 Anki 同步工具"
   },
   "description": {
@@ -25,7 +25,6 @@
     "zh_CN": "README_zh_CN.md"
   },
   "keywords": [
-    "siyuan",
     "anki",
     "ankiconnect",
     "flashcard",
@@ -33,5 +32,7 @@
     "riff"
   ]
 }
+
+
 
 

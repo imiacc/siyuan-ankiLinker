@@ -1,8 +1,7 @@
 /* eslint-disable node/prefer-global/process */
-import { resolve } from "node:path"
 import { rmSync } from "node:fs"
+import { resolve } from "node:path"
 import vue from "@vitejs/plugin-vue"
-
 import fg from "fast-glob"
 import minimist from "minimist"
 import livereload from "rollup-plugin-livereload"
@@ -15,20 +14,16 @@ import zipPack from "vite-plugin-zip-pack"
 
 const pluginInfo = require("./plugin.json")
 
-export default defineConfig(({
-  mode,
-}) => {
-
-  console.log('mode=>', mode)
+export default defineConfig(({ mode }) => {
+  console.log("mode=>", mode)
   const env = loadEnv(mode, process.cwd())
   const {
     VITE_SIYUAN_WORKSPACE_PATH,
   } = env
-  console.log('env=>', env)
-
+  console.log("env=>", env)
 
   const siyuanWorkspacePath = VITE_SIYUAN_WORKSPACE_PATH
-  let devDistDir = './dev'
+  let devDistDir = "./dev"
   if (!siyuanWorkspacePath) {
     console.log("\nSiyuan workspace path is not set.")
   } else {
@@ -46,7 +41,7 @@ export default defineConfig(({
   console.log("distDir=>", distDir)
 
   return {
-        resolve: {
+    resolve: {
       alias: {
         "@": resolve(__dirname, "src"),
       },
@@ -54,7 +49,7 @@ export default defineConfig(({
 
     plugins: [
       vue(),
-            viteStaticCopy({
+      viteStaticCopy({
         targets: [
           {
             src: "./README*.md",
@@ -73,42 +68,30 @@ export default defineConfig(({
             dest: "./",
           },
           {
+            src: "./src/i18n/*.json",
+            dest: "./i18n",
+          },
+          {
             src: "./asset/topbar-icon.svg",
             dest: "./asset",
           },
         ],
       }),
-
     ],
 
-    // https://github.com/vitejs/vite/issues/1930
-
-    // https://vitejs.dev/guide/env-and-mode.html#env-files
-    // https://github.com/vitejs/vite/discussions/3058#discussioncomment-2115319
-    // 在这里自定义变量
     define: {
       "process.env.DEV_MODE": `"${isWatch}"`,
       "process.env.NODE_ENV": JSON.stringify(process.env.NODE_ENV),
     },
 
     build: {
-      // 输出路径
       outDir: distDir,
       emptyOutDir: !isWatch,
-
-      // 构建后是否生成 source map 文件
       sourcemap: false,
-
-      // 设置为 false 可以禁用最小化混淆
-      // 或是用来指定是应用哪种混淆器
-      // boolean | 'terser' | 'esbuild'
-      // 不压缩，用于调试
       minify: !isWatch,
 
       lib: {
-        // Could also be a dictionary or array of multiple entry points
         entry: resolve(__dirname, "src/index.ts"),
-        // the proper extensions will be added
         fileName: "index",
         formats: ["cjs"],
       },
@@ -118,12 +101,12 @@ export default defineConfig(({
             ? [
                 livereload(devDistDir),
                 {
-                  // 监听静态资源文件
                   name: "watch-external",
                   async buildStart() {
-                                        const files = await fg([
+                    const files = await fg([
                       "./README*.md",
                       "./plugin.json",
+                      "./src/i18n/*.json",
                     ])
 
                     for (const file of files) {
@@ -133,7 +116,7 @@ export default defineConfig(({
                 },
               ]
             : [
-                                zipPack({
+                zipPack({
                   inDir: "./dist",
                   outDir: "./",
                   outFileName: "package.zip",
@@ -144,12 +127,9 @@ export default defineConfig(({
                     rmSync(resolve(__dirname, "dist/i18n"), { recursive: true, force: true })
                   },
                 },
-
               ]),
         ],
 
-        // make sure to externalize deps that shouldn't be bundled
-        // into your library
         external: ["siyuan", "process"],
 
         output: {

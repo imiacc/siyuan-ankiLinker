@@ -3,75 +3,75 @@
     <div class="siyuan-anki-linker-shell">
       <header class="hero">
         <div>
-          <p class="eyebrow">SiYuan to Local Anki</p>
-          <h1>siyuan-ankiLinker</h1>
-          <p class="desc">绑定思源原生闪卡 cardID，通过本地 AnkiConnect 同步到已登录你服务器的 Anki 桌面端。</p>
+          <p class="eyebrow">{{ locale.heroEyebrow }}</p>
+          <h1>{{ locale.panelTitle }}</h1>
+          <p class="desc">{{ locale.panelSubtitle }}</p>
         </div>
         <div class="hero-actions">
-          <SyButton @click="detectConnection">检测本地连接</SyButton>
-          <SyButton @click="refreshRemoteMeta">刷新卡组/模型</SyButton>
-          <SyButton @click="saveSettings">保存配置</SyButton>
-          <SyButton @click="closePanel">关闭面板</SyButton>
+          <SyButton @click="detectConnection">{{ locale.detectConnection }}</SyButton>
+          <SyButton @click="refreshRemoteMeta">{{ locale.refreshRemoteMeta }}</SyButton>
+          <SyButton @click="saveSettings">{{ locale.saveSettings }}</SyButton>
+          <SyButton @click="closePanel">{{ locale.closePanel }}</SyButton>
         </div>
       </header>
 
       <section class="panel-grid panel-grid--two">
         <article class="panel">
           <div class="panel-header">
-            <h2>本地 AnkiConnect</h2>
-            <SyButton @click="showAnkiConfig = !showAnkiConfig">{{ showAnkiConfig ? '收起' : '展开' }}</SyButton>
+            <h2>{{ locale.localAnkiConnect }}</h2>
+            <SyButton @click="showAnkiConfig = !showAnkiConfig">{{ showAnkiConfig ? locale.collapse : locale.expand }}</SyButton>
           </div>
 
           <div v-if="showAnkiConfig" class="compact-form">
-            <label class="field-label">AnkiConnect 地址</label>
+            <label class="field-label">{{ locale.ankiConnectUrl }}</label>
             <SyInput v-model="settings.ankiUrl" placeholder="http://127.0.0.1:8765" />
 
-            <label class="field-label">默认目标卡组</label>
+            <label class="field-label">{{ locale.defaultDeck }}</label>
             <SySelect v-model="settings.deckName" :options="deckOptions" />
 
-            <label class="field-label">问答卡模板</label>
+            <label class="field-label">{{ locale.qaNoteType }}</label>
             <SySelect v-model="settings.qaNoteType" :options="noteTypeOptions" />
 
-            <label class="field-label">问答正面字段</label>
+            <label class="field-label">{{ locale.qaFrontField }}</label>
             <SySelect v-model="settings.qaFrontField" :options="qaFieldOptions" />
 
-            <label class="field-label">问答背面字段</label>
+            <label class="field-label">{{ locale.qaBackField }}</label>
             <SySelect v-model="settings.qaBackField" :options="qaFieldOptions" />
 
-            <label class="field-label">填空卡模板</label>
+            <label class="field-label">{{ locale.clozeNoteType }}</label>
             <SySelect v-model="settings.clozeNoteType" :options="noteTypeOptions" />
 
-            <label class="field-label">填空正文字段</label>
+            <label class="field-label">{{ locale.clozeTextField }}</label>
             <SySelect v-model="settings.clozeTextField" :options="clozeFieldOptions" />
 
-            <label class="field-label">填空补充字段</label>
+            <label class="field-label">{{ locale.clozeExtraField }}</label>
             <SySelect v-model="settings.clozeExtraField" :options="clozeFieldOptions" />
           </div>
 
-          <p class="meta">连接状态：{{ connectionStatus }}</p>
-          <p class="meta">字段下拉读取自所选 Anki 模板，可避免手填字段名导致的 empty 错误。</p>
+          <p class="meta">{{ locale.connectionStatus }}：{{ connectionStatus }}</p>
+          <p class="meta">{{ locale.fieldHint }}</p>
         </article>
 
         <article class="panel">
           <div class="panel-header">
-            <h2>按文档路径分配卡组</h2>
+            <h2>{{ locale.pathDeckRouting }}</h2>
             <div class="button-row">
-              <SyButton @click="showPathRules = !showPathRules">{{ showPathRules ? '收起' : '展开' }}</SyButton>
-              <SyButton @click="refreshPathOptions">刷新路径</SyButton>
+              <SyButton @click="showPathRules = !showPathRules">{{ showPathRules ? locale.collapse : locale.expand }}</SyButton>
+              <SyButton @click="refreshPathOptions">{{ locale.refreshPath }}</SyButton>
             </div>
           </div>
-          <p class="meta">同一路径前缀下的闪卡会自动同步到指定卡组；未匹配规则时使用“默认目标卡组”。</p>
+          <p class="meta">{{ locale.pathRuleHint }}</p>
           <div v-if="showPathRules" class="path-rule-section">
             <div class="path-rule-list path-rule-list--scrollable">
               <div v-for="(rule, index) in settings.pathDeckRules" :key="`rule-${index}`" class="path-rule-item path-rule-item--column">
                 <div class="path-current-box">
-                  <div class="path-current-label">当前路径</div>
-                  <div class="path-current-value">{{ rule.path || '未选择' }}</div>
+                  <div class="path-current-label">{{ locale.currentPath }}</div>
+                  <div class="path-current-value">{{ rule.path || locale.notSelected }}</div>
                 </div>
                 <div class="path-input-stack">
                   <SyInput
                     v-model="rulePathSearchStates[index].keyword"
-                    placeholder="输入关键词过滤，或输入 / 逐级推进路径"
+                    :placeholder="locale.pathSearchPlaceholder"
                     @input="onRulePathInput(index)"
                   />
                   <SySelect
@@ -82,63 +82,63 @@
                 </div>
                 <div class="path-rule-actions">
                   <div class="button-row">
-                    <SyButton @click="stepBackRulePath(index)">退一级</SyButton>
-                    <SyButton @click="clearRulePath(index)">清空路径</SyButton>
+                    <SyButton @click="stepBackRulePath(index)">{{ locale.stepBack }}</SyButton>
+                    <SyButton @click="clearRulePath(index)">{{ locale.clearPath }}</SyButton>
                   </div>
                   <SySelect v-model="rule.deckName" :options="deckOptions" />
-                  <SyButton @click="removePathRule(index)">删除</SyButton>
+                  <SyButton @click="removePathRule(index)">{{ locale.remove }}</SyButton>
                 </div>
               </div>
             </div>
             <div class="button-row">
-              <SyButton @click="addPathRule">新增路径规则</SyButton>
+              <SyButton @click="addPathRule">{{ locale.addPathRule }}</SyButton>
             </div>
-            <p class="meta">支持路径搜索与逐级选择，匹配规则按路径前缀生效。</p>
+            <p class="meta">{{ locale.pathRuleFooter }}</p>
           </div>
         </article>
       </section>
 
       <section class="panel-grid panel-grid--two">
         <article class="panel">
-          <h2>思源闪卡状态</h2>
-          <p class="meta">当前版本优先读取思源原生 Riff API；若拿不到 cardID，则回退为基于制卡块的 block 级增量同步，不依赖复习进度。</p>
+          <h2>{{ locale.flashcardStatus }}</h2>
+          <p class="meta">{{ locale.flashcardStatusHint }}</p>
           <div class="stats-grid">
             <div class="stat-card">
               <span class="stat-value">{{ cachedCardCount }}</span>
-              <span class="stat-label">可用闪卡</span>
+              <span class="stat-label">{{ locale.availableFlashcards }}</span>
             </div>
             <div class="stat-card">
               <span class="stat-value">{{ mappingCount }}</span>
-              <span class="stat-label">已建立映射</span>
+              <span class="stat-label">{{ locale.existingMappings }}</span>
             </div>
           </div>
           <div class="button-row">
-            <SyButton @click="refreshCardStats">刷新闪卡统计</SyButton>
-            <SyButton @click="cleanupMappings">清理失效映射</SyButton>
-            <SyButton @click="showDiagnostics = !showDiagnostics">{{ showDiagnostics ? '隐藏诊断' : '显示诊断' }}</SyButton>
+            <SyButton @click="refreshCardStats">{{ locale.refreshCardStats }}</SyButton>
+            <SyButton @click="cleanupMappings">{{ locale.cleanupMappings }}</SyButton>
+            <SyButton @click="showDiagnostics = !showDiagnostics">{{ showDiagnostics ? locale.hideDiagnostics : locale.showDiagnostics }}</SyButton>
           </div>
           <div v-if="showDiagnostics" class="diagnostic-box">
-            <p class="meta">事件缓存：{{ diagnostics.cachedCount }} 张</p>
-            <p class="meta">Riff API：{{ diagnostics.apiCount }} 张</p>
-            <p class="meta">制卡块扫描：{{ diagnostics.blockScanCount }} 张</p>
-            <p class="meta">当前映射：{{ diagnostics.recoveredMappings }} 条</p>
-            <p class="meta">SQL 兜底：{{ diagnostics.sqlCount }} 张</p>
-            <p class="meta">相关表：{{ diagnostics.tableNames.join(' / ') || '未发现' }}</p>
-            <p class="meta">cards 表字段：{{ diagnostics.cardColumns.join(' / ') || '未发现' }}</p>
+            <p class="meta">{{ locale.cachedEvents }}：{{ diagnostics.cachedCount }} {{ locale.cardUnit }}</p>
+            <p class="meta">Riff API：{{ diagnostics.apiCount }} {{ locale.cardUnit }}</p>
+            <p class="meta">{{ locale.blockScan }}：{{ diagnostics.blockScanCount }} {{ locale.cardUnit }}</p>
+            <p class="meta">{{ locale.currentMappings }}：{{ diagnostics.recoveredMappings }} {{ locale.mappingUnit }}</p>
+            <p class="meta">SQL {{ locale.fallback }}：{{ diagnostics.sqlCount }} {{ locale.cardUnit }}</p>
+            <p class="meta">{{ locale.relatedTables }}：{{ diagnostics.tableNames.join(' / ') || locale.notFound }}</p>
+            <p class="meta">cards {{ locale.tableColumns }}：{{ diagnostics.cardColumns.join(' / ') || locale.notFound }}</p>
           </div>
         </article>
 
         <article class="panel">
-          <h2>同步预览</h2>
+          <h2>{{ locale.syncPreview }}</h2>
           <div class="button-row">
-            <SyButton @click="previewSync">生成同步预览</SyButton>
-            <SyButton @click="syncToAnki">执行同步</SyButton>
+            <SyButton @click="previewSync">{{ locale.generatePreview }}</SyButton>
+            <SyButton @click="syncToAnki">{{ locale.runSync }}</SyButton>
           </div>
           <div class="stats-grid stats-grid--compact">
-            <div class="stat-card"><span class="stat-value">{{ previewSummary.added }}</span><span class="stat-label">新增</span></div>
-            <div class="stat-card"><span class="stat-value">{{ previewSummary.updated }}</span><span class="stat-label">更新</span></div>
-            <div class="stat-card"><span class="stat-value">{{ previewSummary.deleted }}</span><span class="stat-label">删除</span></div>
-            <div class="stat-card"><span class="stat-value">{{ previewSummary.invalid }}</span><span class="stat-label">无效</span></div>
+            <div class="stat-card"><span class="stat-value">{{ previewSummary.added }}</span><span class="stat-label">{{ locale.added }}</span></div>
+            <div class="stat-card"><span class="stat-value">{{ previewSummary.updated }}</span><span class="stat-label">{{ locale.updated }}</span></div>
+            <div class="stat-card"><span class="stat-value">{{ previewSummary.deleted }}</span><span class="stat-label">{{ locale.deleted }}</span></div>
+            <div class="stat-card"><span class="stat-value">{{ previewSummary.invalid }}</span><span class="stat-label">{{ locale.invalid }}</span></div>
           </div>
         </article>
       </section>
@@ -146,9 +146,9 @@
       <section class="panel-grid panel-grid--one">
         <article class="panel">
           <div class="log-header">
-            <h2>预览详情</h2>
+            <h2>{{ locale.previewDetails }}</h2>
             <div class="button-row">
-              <SyButton @click="showPreviewDetails = !showPreviewDetails">{{ showPreviewDetails ? '收起详情' : '展开详情' }}</SyButton>
+              <SyButton @click="showPreviewDetails = !showPreviewDetails">{{ showPreviewDetails ? locale.collapseDetails : locale.expandDetails }}</SyButton>
             </div>
           </div>
           <ul v-if="showPreviewDetails" class="preview-list preview-list--scrollable">
@@ -156,17 +156,17 @@
               <strong>{{ item.type }}</strong>
               <span>{{ item.title }}</span>
             </li>
-            <li v-if="previewItems.length === 0" class="meta">暂无预览数据</li>
+            <li v-if="previewItems.length === 0" class="meta">{{ locale.noPreviewData }}</li>
           </ul>
         </article>
       </section>
 
       <section class="panel log-panel">
         <div class="log-header">
-          <h2>同步日志</h2>
+          <h2>{{ locale.syncLogs }}</h2>
           <div class="button-row">
-            <SyButton @click="showLogs = !showLogs">{{ showLogs ? '收起日志' : '展开日志' }}</SyButton>
-            <SyButton @click="clearLogs">清空日志</SyButton>
+            <SyButton @click="showLogs = !showLogs">{{ showLogs ? locale.collapseLogs : locale.expandLogs }}</SyButton>
+            <SyButton @click="clearLogs">{{ locale.clearLogs }}</SyButton>
           </div>
         </div>
         <ul v-if="showLogs" class="log-list">
@@ -189,6 +189,7 @@ import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { hidePanel, usePlugin } from '@/main'
 import { createAnkiClient } from '@/utils/anki'
 import { buildSyncPreview, cleanupInvalidMappings, getAvailableCards, getCardDiagnostics, runSync } from '@/utils/sync'
+import { getPluginI18n } from '@/index'
 import type { AnkiLinkerMapping, AnkiLinkerSettings, PathDeckRule, SyncLogItem, SyncPreviewResult } from '@/types/plugin'
 
 type LegacyPersistedState = {
@@ -219,6 +220,70 @@ const MAPPINGS_STORAGE_KEY = 'mappings.json'
 const LEGACY_STORAGE_KEY = 'ankilinker-state.json'
 
 const plugin = usePlugin()
+const locale = reactive({
+  ...getPluginI18n(plugin),
+  heroEyebrow: plugin.i18n.heroEyebrow || 'SiYuan to Local Anki',
+  detectConnection: plugin.i18n.detectConnection || 'Detect Local Connection',
+  refreshRemoteMeta: plugin.i18n.refreshRemoteMeta || 'Refresh Decks/Models',
+  saveSettings: plugin.i18n.saveSettings || 'Save Settings',
+  closePanel: plugin.i18n.closePanel || 'Close Panel',
+  localAnkiConnect: plugin.i18n.localAnkiConnect || 'Local AnkiConnect',
+  collapse: plugin.i18n.collapse || 'Collapse',
+  expand: plugin.i18n.expand || 'Expand',
+  ankiConnectUrl: plugin.i18n.ankiConnectUrl || 'AnkiConnect URL',
+  defaultDeck: plugin.i18n.defaultDeck || 'Default Target Deck',
+  qaNoteType: plugin.i18n.qaNoteType || 'QA Note Type',
+  qaFrontField: plugin.i18n.qaFrontField || 'QA Front Field',
+  qaBackField: plugin.i18n.qaBackField || 'QA Back Field',
+  clozeNoteType: plugin.i18n.clozeNoteType || 'Cloze Note Type',
+  clozeTextField: plugin.i18n.clozeTextField || 'Cloze Text Field',
+  clozeExtraField: plugin.i18n.clozeExtraField || 'Cloze Extra Field',
+  connectionStatus: plugin.i18n.connectionStatus || 'Connection Status',
+  fieldHint: plugin.i18n.fieldHint || 'Field dropdowns are read from the selected Anki note type to avoid empty errors caused by manual field name input.',
+  pathDeckRouting: plugin.i18n.pathDeckRouting || 'Assign Deck by Document Path',
+  refreshPath: plugin.i18n.refreshPath || 'Refresh Paths',
+  pathRuleHint: plugin.i18n.pathRuleHint || 'Flashcards under the same path prefix will be synced to the specified deck; unmatched rules use the default target deck.',
+  currentPath: plugin.i18n.currentPath || 'Current Path',
+  notSelected: plugin.i18n.notSelected || 'Not Selected',
+  pathSearchPlaceholder: plugin.i18n.pathSearchPlaceholder || 'Filter by keyword, or type / to drill down path levels',
+  stepBack: plugin.i18n.stepBack || 'Step Back',
+  clearPath: plugin.i18n.clearPath || 'Clear Path',
+  remove: plugin.i18n.remove || 'Remove',
+  addPathRule: plugin.i18n.addPathRule || 'Add Path Rule',
+  pathRuleFooter: plugin.i18n.pathRuleFooter || 'Supports path search and stepwise selection; rules are matched by path prefix.',
+  flashcardStatus: plugin.i18n.flashcardStatus || 'SiYuan Flashcard Status',
+  flashcardStatusHint: plugin.i18n.flashcardStatusHint || 'This version prefers the native SiYuan Riff API. If cardID is unavailable, it falls back to block-level incremental sync based on card-creation blocks, without relying on review progress.',
+  availableFlashcards: plugin.i18n.availableFlashcards || 'Available Flashcards',
+  existingMappings: plugin.i18n.existingMappings || 'Existing Mappings',
+  refreshCardStats: plugin.i18n.refreshCardStats || 'Refresh Card Stats',
+  cleanupMappings: plugin.i18n.cleanupMappings || 'Cleanup Invalid Mappings',
+  hideDiagnostics: plugin.i18n.hideDiagnostics || 'Hide Diagnostics',
+  showDiagnostics: plugin.i18n.showDiagnostics || 'Show Diagnostics',
+  cachedEvents: plugin.i18n.cachedEvents || 'Event Cache',
+  blockScan: plugin.i18n.blockScan || 'Block Scan',
+  currentMappings: plugin.i18n.currentMappings || 'Current Mappings',
+  fallback: plugin.i18n.fallback || 'Fallback',
+  relatedTables: plugin.i18n.relatedTables || 'Related Tables',
+  tableColumns: plugin.i18n.tableColumns || 'Table Columns',
+  cardUnit: plugin.i18n.cardUnit || 'cards',
+  mappingUnit: plugin.i18n.mappingUnit || 'items',
+  notFound: plugin.i18n.notFound || 'Not Found',
+  syncPreview: plugin.i18n.syncPreview || 'Sync Preview',
+  generatePreview: plugin.i18n.generatePreview || 'Generate Preview',
+  runSync: plugin.i18n.runSync || 'Run Sync',
+  added: plugin.i18n.added || 'Added',
+  updated: plugin.i18n.updated || 'Updated',
+  deleted: plugin.i18n.deleted || 'Deleted',
+  invalid: plugin.i18n.invalid || 'Invalid',
+  previewDetails: plugin.i18n.previewDetails || 'Preview Details',
+  collapseDetails: plugin.i18n.collapseDetails || 'Collapse Details',
+  expandDetails: plugin.i18n.expandDetails || 'Expand Details',
+  noPreviewData: plugin.i18n.noPreviewData || 'No preview data yet',
+  syncLogs: plugin.i18n.syncLogs || 'Sync Logs',
+  collapseLogs: plugin.i18n.collapseLogs || 'Collapse Logs',
+  expandLogs: plugin.i18n.expandLogs || 'Expand Logs',
+  clearLogs: plugin.i18n.clearLogs || 'Clear Logs',
+})
 const connectionStatus = ref('未检测')
 const deckOptions = ref<SelectOption[]>([{ value: 'Default', text: 'Default' }])
 const noteTypeOptions = ref<SelectOption[]>([{ value: 'Basic', text: 'Basic' }])
