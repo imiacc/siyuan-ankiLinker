@@ -7,17 +7,19 @@
 - 插件 ID / 手动安装目录名：`siyuan-ankiLinker`
 - 仓库：<https://github.com/imiacc/siyuan-ankiLinker>
 - 作者：`imiacc`
-- 当前版本：`0.1.3`
+- 当前版本：`0.1.5`
 
 ## 手动安装说明
 
-现在仓库名与思源插件实际插件 ID 已统一为：`siyuan-ankiLinker`。
+现在仓库名与思源插件实际插件 ID 均为：`siyuan-ankiLinker`。
 
 因此手动安装时，插件目录名必须严格保持为：
 
 - `siyuan-ankiLinker`
 
-同时，插件已内置兼容迁移逻辑，可自动导入旧插件 ID `ankiLinker` 下的本地数据。
+插件已不再兼容旧的 `ankiLinker` Anki 标签。
+如果你之前同步出的 Anki 笔记仅带有这个旧标签，升级后插件将不再通过该标签回查这些旧笔记。
+新创建的笔记只会写入当前插件标签。
 
 ## 功能
 
@@ -125,6 +127,18 @@
 12. 点击“执行同步”
 13. 如需上传到远端服务器，再回到 Anki 执行正常同步
 
+## 预览与旧标签说明
+
+插件现在只通过当前插件标签识别自己同步出的 Anki 笔记：
+
+- `siyuan-anki-linker`
+
+不再查询旧标签：
+
+- `ankiLinker`
+
+如果你依赖的是仅带旧标签的历史笔记，那么从思源重新同步时，插件可能会按当前标签重新创建新笔记。
+
 ## 预览说明
 
 同步预览分为：
@@ -171,8 +185,6 @@
 - `settings.json`
 - `mappings.json`
 - 旧版遗留 `ankilinker-state.json`
-
-同时也会尽量清理旧插件 ID `ankiLinker` 目录下遗留的数据文件。
 
 注意：
 

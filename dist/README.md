@@ -5,19 +5,21 @@ SiYuan flashcard sync plugin for local Anki.
 - Plugin ID / manual install folder name: `siyuan-ankiLinker`
 - Repository: <https://github.com/imiacc/siyuan-ankiLinker>
 - Author: `imiacc`
-- Current version: `0.1.3`
+- Current version: `0.1.5`
 
 ## Manual installation note
 
-The repository name and the actual SiYuan plugin ID are both now:
+The repository name and the actual SiYuan plugin ID are both:
 
 - `siyuan-ankiLinker`
 
-When installing manually, please make sure the plugin directory is named exactly:
+When installing manually, make sure the plugin directory is named exactly:
 
 - `siyuan-ankiLinker`
 
-The plugin also includes compatibility migration logic to import previous local data created under the old plugin ID `ankiLinker`.
+The plugin no longer includes compatibility support for the old `ankiLinker` plugin tag.
+If you previously synced notes with that legacy tag, existing notes will not be discovered through that tag anymore after upgrading.
+Newly created notes are tagged only with the current plugin tag.
 
 ## Sync architecture
 
@@ -131,6 +133,18 @@ This helps avoid errors like:
 12. Run sync
 13. If needed, return to Anki and perform its normal sync
 
+## Preview and note discovery
+
+The plugin discovers its synced Anki notes by the current plugin tag only:
+
+- `siyuan-anki-linker`
+
+It no longer queries the legacy tag:
+
+- `ankiLinker`
+
+If you rely on older notes created only with the legacy tag, re-syncing from SiYuan may create fresh notes under the current tag.
+
 ## Uninstall cleanup
 
 When the plugin is fully uninstalled, it removes its own persisted SiYuan plugin data files, including:
@@ -138,8 +152,6 @@ When the plugin is fully uninstalled, it removes its own persisted SiYuan plugin
 - `settings.json`
 - `mappings.json`
 - legacy `ankilinker-state.json`
-
-This cleanup also attempts to remove legacy files left under the old plugin ID directory `ankiLinker`.
 
 This cleanup only happens during full uninstall, not on normal disable, reload, or update, so your settings will not be accidentally lost during routine development or upgrades.
 

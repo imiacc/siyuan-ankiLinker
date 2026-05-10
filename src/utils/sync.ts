@@ -33,7 +33,6 @@ type CardSourceSnapshot = {
 
 const RUNTIME_KEY = '_sy_siyuan_ankiLinker'
 const PRIMARY_PLUGIN_TAG = 'siyuan-anki-linker'
-const LEGACY_PLUGIN_TAG = 'ankilinker'
 const DEFAULT_SEPARATOR_PATTERN = /^-{3,}$|^\*{3,}$/m
 const KRAMDOWN_BLOCK_IAL_LINE_PATTERN = /^\{:\s+[^\n]*?\bid="[^"]+"[^\n]*\}\s*$/gm
 const KRAMDOWN_INLINE_IAL_PATTERN = /\s*\{:\s+[^\n{}]*\bid="[^"]+"[^\n{}]*\}/g
@@ -514,7 +513,7 @@ async function hydrateMappingsFromAnki(
 
   try {
     const client = createAnkiClient(settings.ankiUrl)
-    const noteIds = await client.findNotes(`tag:${PRIMARY_PLUGIN_TAG} or tag:${LEGACY_PLUGIN_TAG}`)
+    const noteIds = await client.findNotes(`tag:${PRIMARY_PLUGIN_TAG}`)
     if (noteIds.length === 0) {
       return mappings
     }
@@ -716,7 +715,7 @@ export async function cleanupInvalidMappings(
   }
 
   const client = createAnkiClient(settings.ankiUrl)
-  const noteIds = await client.findNotes(`tag:${PRIMARY_PLUGIN_TAG} or tag:${LEGACY_PLUGIN_TAG}`)
+  const noteIds = await client.findNotes(`tag:${PRIMARY_PLUGIN_TAG}`)
   if (noteIds.length === 0) {
     return {
       mappings: [],
@@ -836,7 +835,7 @@ export async function runSync(
         deckName: item.targetDeckName || settings.deckName,
         modelName: item.noteType,
         fields: buildAnkiFields(item, settings),
-        tags: ['siyuan', PRIMARY_PLUGIN_TAG, LEGACY_PLUGIN_TAG, getCandidateTag(item.cardId)],
+        tags: ['siyuan', PRIMARY_PLUGIN_TAG, getCandidateTag(item.cardId)],
       })))
 
       recreateItems.forEach((item, index) => {
@@ -866,7 +865,7 @@ export async function runSync(
       deckName: item.targetDeckName || settings.deckName,
       modelName: item.noteType,
       fields: buildAnkiFields(item, settings),
-      tags: ['siyuan', PRIMARY_PLUGIN_TAG, LEGACY_PLUGIN_TAG, getCandidateTag(item.cardId)],
+      tags: ['siyuan', PRIMARY_PLUGIN_TAG, getCandidateTag(item.cardId)],
     })))
 
     preview.added.forEach((item, index) => {
