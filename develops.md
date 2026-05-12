@@ -105,6 +105,16 @@
 
 ## 开发日志
 
+### 2026-05-13
+
+- 修复填空卡解析 bug：旧版 `==(.+?)==` 是非贪婪但不感知代码段，遇到 `` `needCnt == 0` `` 这类行内代码里的 `==` 会与后面真实高亮 `==O(m+n)==` 的起始 `==` 错配，导致两个 cloze 内容互相串入彼此区间，Anki 端表现为填空错位和 `[...] data-ordinal=` 残片。
+- 修复方案：
+  1. 收紧 cloze 正则为 `==(\S(?:.*?\S)?)==`，要求 `==` 两端紧邻非空白字符，对齐思源自身高亮语法。
+  2. 在 cloze 替换前用 `INLINE_CODE_PATTERN`、`BLOCK_CODE_PATTERN` 把行内/围栏代码替换成内含 NUL 字节哨兵的占位符（形如 NUL+索引+NUL），替换完成后再恢复，从根本上让代码段内 `==` 不参与 cloze 切分。
+  3. 抽出 `applyClozeReplace` 复用，`buildClozeText` 与 `buildClozePreview` 的 front/back 共用同一切分路径，避免三个出口语义不一致。
+- 用用户提交的最小覆盖子串原文作回归：旧 regex 复现出与用户截图一致的乱码；新 regex 输出 `{{c1::O(m + n)}}` / `{{c2::O(∣Σ∣)}}`，且行内代码 `` `needCnt == 0` `` 原样保留。
+- 发布 0.1.7：更新 `plugin.json` / `package.json` / `README.md` / `README_zh_CN.md` / `CHANGELOG.md`，重新构建 `dist/` 与 `package.zip`。
+
 ### 2026-05-07
 
 - 创建 `ankiLinker/` 工程目录。

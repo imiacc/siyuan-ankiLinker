@@ -56,7 +56,10 @@ const KRAMDOWN_BLOCK_IAL_LINE_PATTERN = /^\{:\s+[^\n]*?\bid="[^"]+"[^\n]*\}\s*$/
 const KRAMDOWN_INLINE_IAL_PATTERN = /\s*\{:\s+[^\n{}]*\bid="[^"]+"[^\n{}]*\}/g
 const SIYUAN_LAYOUT_CONTAINER_OPEN_LINE_PATTERN = /^\s*\{\{\{[a-zA-Z][^\n]*$/gm
 const SIYUAN_LAYOUT_CONTAINER_CLOSE_LINE_PATTERN = /^\s*\}\}\}\s*$/gm
-const CLOZE_PATTERN = /==(.+?)==/g
+const CLOZE_PATTERN = /==(\S(?:.*?\S)?)==/g
+const INLINE_CODE_PATTERN = /`[^`\n]+`/g
+const BLOCK_CODE_PATTERN = /```[\s\S]*?```/g
+const CLOZE_MASK_PLACEHOLDER_PATTERN = /(\d+)/g
 const FLASHCARD_BLOCK_IAL_PATTERN = "%custom-riff-decks%"
 const LEGACY_FLASHCARD_BLOCK_IAL_PATTERN = "%custom-fsrs-flashcard%"
 const SQL_SCAN_PAGE_SIZE = 64
@@ -253,17 +256,40 @@ export function splitMarkdownCard(markdown: string): FlashcardPreview | null {
   return { front, back }
 }
 
+function applyClozeReplace(
+  markdown: string,
+  replacer: (content: string, index: number) => string,
+): { text: string; count: number } {
+  const masks: string[] = []
+  const mask = (match: string) => {
+    const placeholder = `${masks.length}`
+    masks.push(match)
+    return placeholder
+  }
+
+  const masked = markdown
+    .replace(BLOCK_CODE_PATTERN, mask)
+    .replace(INLINE_CODE_PATTERN, mask)
+
+  let count = 0
+  const replaced = masked.replace(CLOZE_PATTERN, (_, content: string) => {
+    count += 1
+    return replacer(content, count)
+  })
+
+  const text = replaced.replace(CLOZE_MASK_PLACEHOLDER_PATTERN, (_, idx: string) => masks[Number(idx)] ?? '')
+  return { text, count }
+}
+
 function buildClozeText(markdown: string) {
   const sanitizedMarkdown = sanitizeSiyuanMarkdown(markdown)
-  let index = 0
-  const text = sanitizedMarkdown.replace(CLOZE_PATTERN, (_, content: string) => {
-    index += 1
-    return `{{c${index}::${content.trim()}}}`
-  }).trim()
-
+  const { text, count } = applyClozeReplace(
+    sanitizedMarkdown,
+    (content, index) => `{{c${index}::${content.trim()}}}`,
+  )
   return {
-    text,
-    count: index,
+    text: text.trim(),
+    count,
   }
 }
 
@@ -274,8 +300,8 @@ function buildClozePreview(markdown: string): FlashcardPreview | null {
     return null
   }
 
-  const front = sanitizedMarkdown.replace(CLOZE_PATTERN, '_____').trim()
-  const back = sanitizedMarkdown.replace(CLOZE_PATTERN, '$1').trim()
+  const front = applyClozeReplace(sanitizedMarkdown, () => '_____').text.trim()
+  const back = applyClozeReplace(sanitizedMarkdown, content => content).text.trim()
   if (!front || !back) {
     return null
   }

@@ -5,7 +5,7 @@ SiYuan flashcard sync plugin for local Anki.
 - Plugin ID / manual install folder name: `siyuan-ankiLinker`
 - Repository: <https://github.com/imiacc/siyuan-ankiLinker>
 - Author: `imiacc`
-- Current version: `0.1.6`
+- Current version: `0.1.7`
 
 ## Manual installation note
 
@@ -150,6 +150,14 @@ When the plugin is fully uninstalled, it removes its own persisted SiYuan plugin
 - `mappings.json`
 
 This cleanup only happens during full uninstall, not on normal disable, reload, or update, so your settings will not be accidentally lost during routine development or upgrades.
+
+## What changed in 0.1.7
+
+- Fixed a cloze parsing bug where the old `==(.+?)==` regex was greedy across inline code: the `==` inside `` `needCnt == 0` `` was paired with the first `==` of a real highlight, so the two intended clozes `==O(m+n)==` and `==O(∣Σ∣)==` ended up wrapping the wrong spans and produced garbled Anki cards (`[...] data-ordinal=` fragments).
+- Tightened the cloze regex to `==(\S(?:.*?\S)?)==`, which requires non-whitespace adjacent to `==`, matching SiYuan's own highlight syntax.
+- Added inline / fenced code masking before cloze replacement, so `==` inside `` `...` `` or ``` ```...``` ``` is no longer treated as a cloze marker.
+- Refactored `buildClozeText` and `buildClozePreview` (front/back) to share `applyClozeReplace`, keeping the three paths consistent.
+- Rebuilt release artifacts.
 
 ## What changed in 0.1.6
 
