@@ -404,8 +404,8 @@ const logs = ref<SyncLogItem[]>([])
 const showLogs = ref(false)
 const showDiagnostics = ref(false)
 const showPreviewDetails = ref(false)
-const showAnkiConfig = ref(true)
-const showPathRules = ref(true)
+const showAnkiConfig = ref(false)
+const showPathRules = ref(false)
 const importInputRef = ref<HTMLInputElement | null>(null)
 const mappings = ref<AnkiLinkerMapping[]>([])
 const previewResult = ref<SyncPreviewResult | null>(null)
@@ -552,7 +552,7 @@ function syncRuleSearchStates() {
     selectedPath: String(rule.path || ''),
     basePath: rulePathSearchStates.value[index]?.basePath || String(rule.path || ''),
   }))
-  ruleEditStates.value = settings.pathDeckRules.map((_, index) => ruleEditStates.value[index] ?? true)
+  ruleEditStates.value = settings.pathDeckRules.map((_, index) => ruleEditStates.value[index] ?? false)
 }
 
 function getChildOptionsByBasePath(basePath: string) {

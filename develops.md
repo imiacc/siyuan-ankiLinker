@@ -105,6 +105,13 @@
 
 ## 开发日志
 
+### 2026-05-14
+
+- 修复超级块制卡 bug：原 `parseFlashcardCandidate` 判定链是「分隔符 → 填空 → 子块」，对超级块也会先跑 cloze 检测。当超级块包含代码块时，合并后的 kramdown 中代码块边界处的 `==`（如 `if (i == 0 && j == 0)`）在边界场景被识别为 cloze 标记，导致 Anki 卡片填空错位、关键字符（如行号 `62`、数字 `0`）随之被吞掉。
+- 修复方案：在 `collectFlashcardCandidates` 拿到原始 kramdown 后立即用 `/^\s*\{\{\{[a-zA-Z]/` 检测是否为超级块（layout container 起始标记，sanitize 前判断，避免标记被剥掉），并把 `isSuperBlock` 标志透传到 `parseFlashcardCandidate`；对超级块强制只走 `buildChildBlockPreview`——首子块作为正面、剩余子块合并作为反面，**完全跳过 cloze 检测**，符合用户对超级块「首块问题、其余答案」的语义期望，也避免依赖 cloze 占位/还原的边界细节。
+- 收起/展开默认值优化：`showAnkiConfig`、`showPathRules` 改为默认 `ref(false)`，让面板首屏更克制；`syncRuleSearchStates` 中已有规则的 `ruleEditStates` 默认 `?? false`，加载的路径规则直接呈现「完成」状态；`addPathRule` 仍显式 push `true` 并把 `showPathRules` 置 `true`，保证新增路径时自动展开并进入编辑态，符合「刚加就要填」的直觉。
+- 发布 0.1.8：更新 `plugin.json` / `package.json` / `CHANGELOG.md` / `develops.md` / `README.md` / `README_zh_CN.md`，重新构建 `dist/` 与 `package.zip`。
+
 ### 2026-05-13
 
 - 修复填空卡解析 bug：旧版 `==(.+?)==` 是非贪婪但不感知代码段，遇到 `` `needCnt == 0` `` 这类行内代码里的 `==` 会与后面真实高亮 `==O(m+n)==` 的起始 `==` 错配，导致两个 cloze 内容互相串入彼此区间，Anki 端表现为填空错位和 `[...] data-ordinal=` 残片。

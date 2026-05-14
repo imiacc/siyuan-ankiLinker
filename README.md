@@ -1,185 +1,161 @@
 # siyuan-ankiLinker
 
-SiYuan flashcard sync plugin for local Anki.
+[简体中文](./README_zh_CN.md)
 
-- Plugin ID / manual install folder name: `siyuan-ankiLinker`
-- Repository: <https://github.com/imiacc/siyuan-ankiLinker>
+SiYuan flashcard one-way sync plugin for local Anki.
+
+- Plugin ID / manual install folder: `siyuan-ankiLinker`
+- Repository: <https://github.com/imiacc/imiacc/siyuan-ankiLinker>
 - Author: `imiacc`
-- Current version: `0.1.7`
 
-## Manual installation note
+## Overview
 
-The repository name and the actual SiYuan plugin ID are both:
+This plugin pushes SiYuan flashcards into your local Anki instance through `AnkiConnect`. After the local notes are populated, Anki Desktop performs its own normal sync to your account/server.
 
-- `siyuan-ankiLinker`
+The sync direction is strictly **SiYuan → Anki**. The plugin never writes back into SiYuan.
 
-When installing manually, make sure the plugin directory is named exactly:
+## Requirements
 
-- `siyuan-ankiLinker`
+1. `Anki Desktop` must be running.
+2. `Anki Desktop` must be signed in if you want cloud sync.
+3. `AnkiConnect` add-on must be installed and enabled.
+4. The plugin talks to a local URL such as `http://127.0.0.1:8765`.
 
-The plugin now works only with the current `siyuan-ankiLinker` identity and tag.
-It does not read, migrate, or clean up data from older plugin variants.
-Newly created notes are tagged only with the current plugin tag.
+## Manual installation
 
-## Sync architecture
+The repository name and plugin ID are both `siyuan-ankiLinker`. When installing manually, name the plugin directory exactly `siyuan-ankiLinker`.
 
-This plugin uses the following path:
-
-- SiYuan plugin → local `AnkiConnect` → local `Anki Desktop`
-- Then `Anki Desktop` performs its own normal sync to your Anki account/server
-
-Requirements:
-
-1. `Anki Desktop` must be running
-2. `Anki Desktop` must be logged in if you want cloud sync
-3. `AnkiConnect` must be installed and enabled
-4. This plugin talks to a local URL such as `http://127.0.0.1:8765`
+The plugin only reads/writes data tagged with its current identity (`siyuan-anki-linker`). It does not migrate or clean up data from older plugin variants.
 
 ## Features
 
-- Uses SiYuan flashcard `cardID` as stable sync identity
-- Manual sync from SiYuan to local Anki
-- Incremental add / update / delete
-- Separate note type selection for QA cards and Cloze cards
-- Automatically reads field names from the selected Anki note type and lets you choose them from dropdowns
-- Supports routing cards to different Anki decks based on SiYuan document path prefixes
-- Sync preview, logs, and local mapping persistence
-- Config export/import from the top action area
-- Deletion diagnostics to inspect whether mappings can be safely deleted
-- Improved aligned path-rule summary rows with right-side edit/remove actions
+- Uses SiYuan flashcard `cardID` as the stable sync identity; falls back to `blockID` when a card identifier is unavailable.
+- Manual sync from SiYuan to local Anki, with incremental add / update / delete.
+- Separate note type and field mapping for QA cards and Cloze cards.
+- Reads field names from the selected Anki note type — fields are chosen from a dropdown to avoid typos.
+- Routes flashcards into different Anki decks by SiYuan document path prefix.
+- Sync preview, sync logs, local mapping persistence.
+- Config export / import in the top toolbar.
+- Deletion diagnostics: inspect orphaned mappings and whether deletion is safe before running sync.
+- Path-rule summary view with edit / done states and right-aligned action buttons.
 
-## Supported card parsing
+## Supported card formats
 
-### QA cards
+The plugin decides per-flashcard which format to apply.
 
-Supported formats:
+### Super blocks (parent / container blocks)
 
-- A single block split by `---` or `***`
-- Parent/super block QA: first child block is front, remaining child blocks are back
+If the flashcard block is a SiYuan super block (its kramdown begins with `{{{<layout>`), the plugin **always** uses the structural QA approach:
 
-### Cloze cards
+- First child block → front
+- Remaining child blocks (joined) → back
 
-Use SiYuan highlight syntax:
+Cloze detection is intentionally **skipped** for super blocks. This prevents `==` inside a child code block (for example `if (i == 0 && j == 0)`) from being misread as a cloze marker on the merged container content.
 
-```md README.md
+### Separator-based QA (single block)
+
+For a single non-super-block flashcard, a horizontal separator splits front and back:
+
+- `---` (three or more dashes)
+- `***` (three or more asterisks)
+
+### Cloze (single block)
+
+SiYuan highlight syntax is converted to Anki Cloze:
+
+```md
 The closest planet to the sun is ==Mercury==.
 ```
 
-It becomes:
+becomes
 
-```text README.md
+```text
 The closest planet to the sun is {{c1::Mercury}}.
 ```
 
-## Sync direction and deletion behavior
+The cloze regex requires `==` to be adjacent to non-whitespace on both sides, matching SiYuan's own highlight rule. Inline `` `…` `` and fenced ```` ```…``` ```` code spans are masked before cloze detection, so `==` inside code never becomes a cloze marker.
+
+### Fallback child block
+
+For non-super-blocks that have multiple direct children (e.g. some list-shaped flashcards), the plugin also tries first-child-as-front, rest-as-back as a fallback after separator and cloze detection fail.
+
+## Sync semantics
 
 ### SiYuan → Anki
 
-This plugin is **one-way sync**:
-
-- If a flashcard is added in SiYuan, a note is created in Anki
-- If a flashcard is changed in SiYuan, the mapped Anki note is updated
-- If a flashcard disappears from SiYuan, the mapped Anki note is deleted
+- New flashcard in SiYuan → new note in Anki.
+- Changed flashcard in SiYuan → mapped Anki note is updated.
+- Flashcard removed from SiYuan → mapped Anki note is deleted (when sources are reliable; see *Deletion safety* below).
 
 ### Anki → SiYuan
 
-No reverse writing is performed:
+Nothing. Editing or deleting an Anki note never touches SiYuan. If the SiYuan flashcard still exists on the next sync, the plugin may recreate or remap the Anki note.
 
-- Editing an Anki note does not update SiYuan content
-- Deleting an Anki note does not delete SiYuan blocks
-- If the SiYuan flashcard still exists, the plugin may recreate or remap it on the next sync
+### Deletion safety
 
-## Deck routing by path
+The plugin only marks an Anki note for deletion when its flashcard sources (SQL `cards` table and / or flashcard block scan) are reliable. If those sources return empty or unreliable data, deletions are suppressed so that an Anki side is never wiped out by a transient SiYuan-side read failure.
 
-The plugin reads each flashcard's SiYuan document path (`hPath`) and matches it against your configured path rules.
+## Deck routing by document path
 
-Example:
+Each flashcard's owning document path (`hPath`) is matched against your configured rules:
 
 - `/English/Vocabulary` → `English::Vocab`
 - `/Math/Linear Algebra` → `Math::LinearAlgebra`
 
-Matching logic:
-
-- first matching `startsWith` rule wins
-- if no rule matches, the default deck is used
+Matching is `startsWith`. The first matching rule wins. If no rule matches, the default target deck is used.
 
 ## Template and field selection
 
-The plugin no longer assumes that:
+The plugin does not assume any specific field layout. For each chosen note type it:
 
-- QA fields are always `Front / Back`
-- Cloze fields are always `Text / Extra`
+1. Reads the note type from Anki.
+2. Fetches its field list.
+3. Lets you pick the QA front / back fields (or Cloze text / extra fields) from dropdowns.
 
-Instead it:
+This avoids errors such as `cannot create note because it is empty` caused by manually typed field names.
 
-1. reads the selected Anki note type
-2. fetches its field list
-3. lets you pick the fields from dropdowns
+## Asset link rewriting
 
-This helps avoid errors like:
-
-- `cannot create note because it is empty`
+When writing content to Anki, SiYuan `/assets/…` references are rewritten to absolute URLs against the current SiYuan host, so images and attachments resolve correctly from Anki's renderer.
 
 ## Usage
 
-1. Start local `Anki Desktop`
-2. Ensure `AnkiConnect` is installed and enabled
-3. Open the plugin panel
-4. Detect local connection
-5. Refresh decks/models
-6. Choose the default deck
-7. Choose QA and Cloze note types
-8. Choose the target fields from dropdowns
-9. Optionally add path-prefix-to-deck rules
-10. Generate sync preview
-11. Review added / updated / deleted / invalid items
-12. Run sync
-13. If needed, return to Anki and perform its normal sync
+1. Start local Anki Desktop.
+2. Ensure `AnkiConnect` is installed and enabled.
+3. Open the plugin panel.
+4. Click **Detect Local Connection**.
+5. Click **Refresh Decks / Note Types**.
+6. Choose the default deck.
+7. Choose QA and Cloze note types.
+8. Choose the target fields from the dropdowns.
+9. (Optional) Add path-prefix → deck rules.
+10. Click **Generate Sync Preview**.
+11. Review added / updated / deleted / invalid items.
+12. Click **Run Sync**.
+13. (Optional) Return to Anki and run its normal sync to your account.
 
-## Preview and note discovery
+## Tags
 
-The plugin discovers its synced Anki notes by the current plugin tag only:
+Notes synced by this plugin carry two stable tags so they can be recovered and matched even if the local mapping file is lost:
 
-- `siyuan-anki-linker`
+- `siyuan-anki-linker` — plugin identity tag, used to locate all notes owned by the plugin.
+- `siyuan-card:<cardID>` — per-card identity tag, used to relink a SiYuan flashcard to its existing Anki note.
+
+A `siyuan` tag is also written for general filtering.
 
 ## Uninstall cleanup
 
-When the plugin is fully uninstalled, it removes its own persisted SiYuan plugin data files, including:
+A full uninstall removes the plugin's own persisted data:
 
 - `settings.json`
 - `mappings.json`
 
-This cleanup only happens during full uninstall, not on normal disable, reload, or update, so your settings will not be accidentally lost during routine development or upgrades.
-
-## What changed in 0.1.7
-
-- Fixed a cloze parsing bug where the old `==(.+?)==` regex was greedy across inline code: the `==` inside `` `needCnt == 0` `` was paired with the first `==` of a real highlight, so the two intended clozes `==O(m+n)==` and `==O(∣Σ∣)==` ended up wrapping the wrong spans and produced garbled Anki cards (`[...] data-ordinal=` fragments).
-- Tightened the cloze regex to `==(\S(?:.*?\S)?)==`, which requires non-whitespace adjacent to `==`, matching SiYuan's own highlight syntax.
-- Added inline / fenced code masking before cloze replacement, so `==` inside `` `...` `` or ``` ```...``` ``` is no longer treated as a cloze marker.
-- Refactored `buildClozeText` and `buildClozePreview` (front/back) to share `applyClozeReplace`, keeping the three paths consistent.
-- Rebuilt release artifacts.
-
-## What changed in 0.1.6
-
-- Added config export/import actions in the top toolbar area
-- Added deletion diagnostics for mapping safety checks before delete decisions
-- Improved path-to-deck rule summary alignment and actions layout
-- Improved sync internals with snapshot/tag cache and batched update execution
-- Improved Markdown asset link rewriting before writing content to Anki
-- Updated uninstall cleanup to fully remove only current `siyuan-ankiLinker` plugin storage
-- Updated README and changelog for the current publishable release
+Disable / reload / upgrade does not touch this data, so routine development and version upgrades do not wipe your config.
 
 ## Build
 
-Install dependencies:
-
-```powershell README.md
+```powershell
 D:\Environment\nodejs22\npm.cmd install
-```
-
-Build:
-
-```powershell README.md
 D:\Environment\nodejs22\npx.cmd vite build
 ```
 
@@ -188,3 +164,4 @@ Generated output:
 - `dist/`
 - `package.zip`
 
+See [CHANGELOG.md](./CHANGELOG.md) for version history and [develops.md](./develops.md) for development log.

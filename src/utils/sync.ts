@@ -56,6 +56,7 @@ const KRAMDOWN_BLOCK_IAL_LINE_PATTERN = /^\{:\s+[^\n]*?\bid="[^"]+"[^\n]*\}\s*$/
 const KRAMDOWN_INLINE_IAL_PATTERN = /\s*\{:\s+[^\n{}]*\bid="[^"]+"[^\n{}]*\}/g
 const SIYUAN_LAYOUT_CONTAINER_OPEN_LINE_PATTERN = /^\s*\{\{\{[a-zA-Z][^\n]*$/gm
 const SIYUAN_LAYOUT_CONTAINER_CLOSE_LINE_PATTERN = /^\s*\}\}\}\s*$/gm
+const SIYUAN_SUPER_BLOCK_DETECT_PATTERN = /^\s*\{\{\{[a-zA-Z]/
 const CLOZE_PATTERN = /==(\S(?:.*?\S)?)==/g
 const INLINE_CODE_PATTERN = /`[^`\n]+`/g
 const BLOCK_CODE_PATTERN = /```[\s\S]*?```/g
@@ -342,11 +343,27 @@ async function buildChildBlockPreview(blockID: string): Promise<FlashcardPreview
   }
 }
 
-async function parseFlashcardCandidate(card: ICard, rawMarkdown: string): Promise<{
+async function parseFlashcardCandidate(card: ICard, rawMarkdown: string, isSuperBlock: boolean): Promise<{
   preview: FlashcardPreview | null
   kind: FlashcardKind
   clozeText: string
 }> {
+  if (isSuperBlock) {
+    const childPreview = await buildChildBlockPreview(card.blockID)
+    if (childPreview) {
+      return {
+        preview: childPreview,
+        kind: 'qa',
+        clozeText: '',
+      }
+    }
+    return {
+      preview: null,
+      kind: 'qa',
+      clozeText: '',
+    }
+  }
+
   const markdownPreview = splitMarkdownCard(rawMarkdown)
   if (markdownPreview) {
     return {
@@ -834,8 +851,10 @@ export async function collectFlashcardCandidates(cards: ICard[], settings?: Anki
       getHPathByID(card.blockID).catch(() => ''),
     ])
 
-    const rawMarkdown = sanitizeSiyuanMarkdown((kramdown?.kramdown || '').trim())
-    const parsed = await parseFlashcardCandidate(card, rawMarkdown)
+    const rawKramdown = String(kramdown?.kramdown || '').trim()
+    const isSuperBlock = SIYUAN_SUPER_BLOCK_DETECT_PATTERN.test(rawKramdown)
+    const rawMarkdown = sanitizeSiyuanMarkdown(rawKramdown)
+    const parsed = await parseFlashcardCandidate(card, rawMarkdown, isSuperBlock)
     const targetDeckName = settings ? resolveDeckNameByPath(String(hPath || ''), settings) : ''
 
     const draftCandidate: FlashcardCandidate = {
