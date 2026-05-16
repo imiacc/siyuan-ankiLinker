@@ -1043,16 +1043,18 @@ function isAnkiNoteNotFoundError(error: unknown) {
   return String(error || '').includes('Note was not found')
 }
 
-async function runInBatches<T>(items: T[], batchSize: number, worker: (item: T) => Promise<void>) {
+async function runInBatches<T>(items: T[], batchSize: number, worker: (item: T) => Promise<void>, onBatchDone?: (processed: number) => void) {
   for (let index = 0; index < items.length; index += batchSize) {
     const batch = items.slice(index, index + batchSize)
     await Promise.all(batch.map(item => worker(item)))
+    if (onBatchDone) onBatchDone(index + batch.length)
   }
 }
 
 export async function runSync(
   settings: AnkiLinkerSettings,
   mappings: AnkiLinkerMapping[],
+  onProgress?: (percent: number) => void,
 ): Promise<{
   mappings: AnkiLinkerMapping[]
   preview: SyncPreviewResult
@@ -1063,12 +1065,22 @@ export async function runSync(
   const rebuiltMappingIndex = createMappingIndex(rebuiltMappings)
   const nextMappings = new Map(rebuiltMappings.map(item => [item.siyuanCardId, item]))
 
+  const totalItems = preview.deleted.length + preview.updated.length + preview.added.length
+  let completedItems = 0
+  const reportProgress = () => {
+    if (onProgress && totalItems > 0) {
+      onProgress(Math.round((completedItems / totalItems) * 100))
+    }
+  }
+
   if (preview.deleted.length > 0) {
     const deleteIds = preview.deleted.map(item => item.ankiNoteId)
     await client.deleteNotes(deleteIds)
     for (const item of preview.deleted) {
       nextMappings.delete(item.siyuanCardId)
     }
+    completedItems += preview.deleted.length
+    reportProgress()
   }
 
   if (preview.updated.length > 0) {
@@ -1110,6 +1122,9 @@ export async function runSync(
         rebuiltMappingIndex.byBlockId.delete(mapping.siyuanBlockId)
         recreateItems.push(item)
       }
+    }, (processed) => {
+      completedItems = preview.deleted.length + processed
+      reportProgress()
     })
 
     if (recreateItems.length > 0) {
@@ -1168,6 +1183,8 @@ export async function runSync(
         updatedAt: new Date().toISOString(),
       })
     })
+    completedItems = totalItems
+    reportProgress()
   }
 
   invalidateSyncCaches(settings)

@@ -226,6 +226,7 @@
             <div class="stat-card"><span class="stat-value">{{ previewSummary.deleted }}</span><span class="stat-label">{{ locale.deleted }}</span></div>
             <div class="stat-card"><span class="stat-value">{{ previewSummary.invalid }}</span><span class="stat-label">{{ locale.invalid }}</span></div>
           </div>
+          <p class="meta">{{ syncProgressText }}</p>
         </article>
       </section>
 
@@ -390,6 +391,10 @@ const locale = reactive({
   blockIdFilterPlaceholder: plugin.i18n.blockIdFilterPlaceholder || 'Filter blockId / cardId / path',
   clearFilter: plugin.i18n.clearFilter || 'Clear Filter',
   importConfigInvalid: plugin.i18n.importConfigInvalid || 'Invalid config file',
+  syncProgress: plugin.i18n.syncProgress || 'Sync Progress',
+  syncStatusReady: plugin.i18n.syncStatusReady || 'Ready',
+  syncStatusSyncing: plugin.i18n.syncStatusSyncing || 'Syncing',
+  syncStatusDone: plugin.i18n.syncStatusDone || 'Done',
 })
 const connectionStatus = ref('未检测')
 const deckOptions = ref<SelectOption[]>([{ value: 'Default', text: 'Default' }])
@@ -433,6 +438,14 @@ const previewSummary = computed(() => previewResult.value?.summary || {
   deleted: 0,
   unchanged: 0,
   invalid: 0,
+})
+
+const syncStatus = ref<'ready' | 'syncing' | 'done'>('ready')
+const syncPercent = ref(0)
+const syncProgressText = computed(() => {
+  if (syncStatus.value === 'syncing') return `${locale.syncProgress}：${locale.syncStatusSyncing} ${syncPercent.value}%`
+  if (syncStatus.value === 'done') return `${locale.syncProgress}：${locale.syncStatusDone}`
+  return `${locale.syncProgress}：${locale.syncStatusReady}`
 })
 
 const cachedCardCount = ref(0)
@@ -989,6 +1002,8 @@ const previewSync = async () => {
     previewResult.value = await buildSyncPreview(settings, mappings.value)
     await refreshDeletionDiagnostics()
     showPreviewDetails.value = true
+    syncStatus.value = 'ready'
+    syncPercent.value = 0
     addLog(`同步预览完成：新增 ${previewSummary.value.added}，更新 ${previewSummary.value.updated}，删除 ${previewSummary.value.deleted}，无效 ${previewSummary.value.invalid}`)
   } catch (error) {
     addLog(`生成同步预览失败：${String(error)}`)
@@ -997,15 +1012,23 @@ const previewSync = async () => {
 
 const syncToAnki = async () => {
   try {
-    const result = await runSync(settings, mappings.value)
+    syncStatus.value = 'syncing'
+    syncPercent.value = 0
+    const result = await runSync(settings, mappings.value, (percent) => {
+      syncPercent.value = percent
+    })
     mappings.value = result.mappings
     previewResult.value = result.preview
+    syncStatus.value = 'done'
+    syncPercent.value = 100
     await refreshDeletionDiagnostics()
     showPreviewDetails.value = true
     await persistState()
     addLog(`同步完成：新增 ${result.preview.summary.added}，更新 ${result.preview.summary.updated}，删除 ${result.preview.summary.deleted}`)
     addLog('若需同步到你的远端服务器，请回到 Anki 桌面端执行正常同步。')
   } catch (error) {
+    syncStatus.value = 'ready'
+    syncPercent.value = 0
     addLog(`执行同步失败：${String(error)}`)
   }
 }

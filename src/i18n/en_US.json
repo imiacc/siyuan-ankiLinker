@@ -82,5 +82,9 @@
   "blockIdFilter": "Filter by blockId",
   "blockIdFilterPlaceholder": "Filter blockId / cardId / path",
   "clearFilter": "Clear Filter",
-  "importConfigInvalid": "Invalid config file"
+  "importConfigInvalid": "Invalid config file",
+  "syncProgress": "Sync Progress",
+  "syncStatusReady": "Ready",
+  "syncStatusSyncing": "Syncing",
+  "syncStatusDone": "Done"
 }

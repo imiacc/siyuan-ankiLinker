@@ -105,6 +105,15 @@
 
 ## 开发日志
 
+### 2026-05-16
+
+- 新增「同步进度」显示：用户反馈卡片数量增多后同步耗时变长，希望有进度反馈。在 `runSync` 增加可选 `onProgress(percent)` 回调，`runInBatches` 增加 `onBatchDone(processed)` 回调，把「删除（一次性）→ 更新（按 batch）→ 新增（一次性）」三阶段的累计完成数除以 `totalItems` 上报百分比。
+- App.vue 侧用 `syncStatus: 'ready' | 'syncing' | 'done'` + `syncPercent` 两个 ref 驱动一个 `syncProgressText` computed，文案走 i18n（中文「就绪 / 同步中 N% / 完成」、英文「Ready / Syncing N% / Done」）。
+- UI 位置：「同步预览」面板 stats-grid 下方一行 `<p class="meta">`，复用 `flashcardStatusHint` 的样式约定，避免风格割裂。
+- 状态机：插件启动初始 `ready` → 点击「生成同步预览」回到 `ready` 并把 percent 清零 → 点击「执行同步」转 `syncing`，回调期间更新 percent → 完成转 `done`，percent 锁 100 → 异常回退 `ready` 并清零。
+- 此次仅恢复同步进度功能，未恢复此前回退掉的「双链解析」「末尾跳转链接」（在用户实际环境下点击 `siyuan://` 链接无反应，根因是 markdown 渲染插件接管了 click 事件 / 给链接加 `target="_blank"`，无法在思源插件侧绕过；需要在 Anki 侧装一个 Python 插件配合，超出本插件范围）。
+- 发布 0.1.9：更新 `plugin.json` / `package.json` / `CHANGELOG.md` / `develops.md`，重新构建 `dist/` 与 `package.zip`。
+
 ### 2026-05-14
 
 - 修复超级块制卡 bug：原 `parseFlashcardCandidate` 判定链是「分隔符 → 填空 → 子块」，对超级块也会先跑 cloze 检测。当超级块包含代码块时，合并后的 kramdown 中代码块边界处的 `==`（如 `if (i == 0 && j == 0)`）在边界场景被识别为 cloze 标记，导致 Anki 卡片填空错位、关键字符（如行号 `62`、数字 `0`）随之被吞掉。

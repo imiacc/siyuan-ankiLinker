@@ -38,6 +38,7 @@ The plugin only reads/writes data tagged with its current identity (`siyuan-anki
 - Config export / import in the top toolbar.
 - Deletion diagnostics: inspect orphaned mappings and whether deletion is safe before running sync.
 - Path-rule summary view with edit / done states and right-aligned action buttons.
+- Sync progress indicator: shows `Sync Progress: Ready / Syncing N% / Done` under the sync preview panel, useful when the card count grows large.
 
 ## Supported card formats
 

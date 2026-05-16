@@ -82,5 +82,9 @@
   "blockIdFilter": "按 blockId 过滤",
   "blockIdFilterPlaceholder": "过滤 blockId / cardId / 路径",
   "clearFilter": "清空过滤",
-  "importConfigInvalid": "配置文件格式无效"
+  "importConfigInvalid": "配置文件格式无效",
+  "syncProgress": "同步进度",
+  "syncStatusReady": "就绪",
+  "syncStatusSyncing": "同步中",
+  "syncStatusDone": "完成"
 }
