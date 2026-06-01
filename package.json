@@ -1,10 +1,7 @@
 {
   "name": "siyuan-ankiLinker",
-    "version": "0.1.9",
-
-
+  "version": "0.1.10",
   "type": "module",
-
   "description": "Sync SiYuan flashcards to local Anki via AnkiConnect",
   "author": "imiacc",
   "license": "MIT",

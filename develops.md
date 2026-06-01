@@ -4,14 +4,21 @@
 
 ### 1. 目标
 
-构建一个基于思源笔记插件体系的同步工具，将思源闪卡手动同步到 Anki，并尽量保留 Markdown 内容结构，尤其是公式内容。
+构建一个基于思源笔记插件体系的手动同步工具，将思源原生闪卡单向同步到本地 Anki，并尽量保留 Markdown、列表、公式、图片等内容结构。
+
+核心原则：
+
+- 思源是唯一事实源，插件不做 Anki → 思源的反向写入。
+- 同步不修改思源块内容或块属性。
+- 通过本地映射文件与 Anki 标签双重身份恢复，降低重复建卡和映射丢失风险。
+- 优先让用户在 UI 中完成诊断、预览、字段选择与安全删除确认。
 
 ### 2. 技术选择
 
 - 模板：`plugin-sample-vite-vue`
 - 前端：`Vue 3 + TypeScript`
 - 构建：`Vite`
-- 思源侧：`siyuan` 插件 API
+- 思源侧：`siyuan` 插件 API + 内核 HTTP API（kramdown、属性、SQL、hPath、Riff cards）
 - Anki 侧：`AnkiConnect`
 
 ### 3. 为什么选择 Vue 模板
@@ -27,83 +34,97 @@
 
 #### UI 层
 
-- AnkiConnect 连接测试
-- Anki 卡组选择
-- Anki 笔记类型选择
-- 来源块 ID 输入
-- 同步预览
-- 执行同步
-- 同步日志展示
+- AnkiConnect 连接检测。
+- Anki 卡组、Note Type、字段列表刷新与下拉选择。
+- 问答卡 / 填空卡分别配置 Note Type 与目标字段。
+- 路径前缀 → Anki 卡组规则配置。
+- 思源闪卡来源诊断、同步预览、删除诊断、执行同步、同步进度与日志。
+- 配置导出 / 导入。
 
 #### 配置层
 
-保存以下信息：
+保存以下信息到 `settings.json`：
 
-- AnkiConnect 地址
-- 默认卡组
-- 默认笔记类型
-- 来源块 ID 列表
+- AnkiConnect 地址。
+- 默认目标卡组。
+- QA / Cloze Note Type 与字段映射。
+- 路径分卡组规则。
+
+同步映射保存到 `mappings.json`，记录 SiYuan card/block 身份、Anki noteId、卡组、模型、内容 hash 与时间戳。
 
 #### 同步层
 
-当前采用“显式块 ID + Markdown 分隔”的初步策略：
+当前已经接入思源原生闪卡来源，不再依赖手工输入块 ID：
 
-- 用户指定要同步的思源块 ID。
-- 插件读取块的 kramdown/Markdown 内容。
-- 使用 `---` 或 `***` 分隔正反面。
-- 基于哈希比对判断新增、更新、删除。
+- 合并运行时缓存、Riff API、到期卡、SQL `cards` 表与 IAL 块扫描。
+- 按 `blockID` 去重，并优先保留真实 `cardID`；缺失 cardID 时使用 `block:<blockID>` 合成身份。
+- 读取每个闪卡块的 kramdown、属性与 hPath，按超级块 / 分隔符 QA / cloze / 子块兜底顺序解析。
+- 根据 hPath 路径规则决定目标 Anki 卡组。
+- 用内容 hash、目标卡组与 Note Type 判断新增 / 更新 / 删除 / 不变 / 无效。
+- 执行同步时先删除、再分批更新、最后新增；更新失败且 Anki note 不存在时重建。
 
 #### 数据层
 
 本地持久化：
 
-- 配置信息
-- `blockId -> anki noteId` 映射
-- 每张卡的摘要哈希
-- 最近同步后的卡组/模型信息
+- `settings.json`：配置。
+- `mappings.json`：`cardId/blockId -> anki noteId` 映射、hash、卡组、模型。
 
-### 5. Markdown 适配策略
+Anki 笔记写入标签：
 
-- 以 Markdown 为主，不以富文本 HTML 为主。
-- 对公式保留原始标记，避免丢失数学表达式语义。
-- 优先传输 `Front` / `Back` 原始文本字段。
-- 将 Markdown 渲染能力尽量放到 Anki 端模板或插件层解决。
+- `siyuan-anki-linker`：插件身份标签。
+- `siyuan-card:<cardID>`：单卡身份标签。
+- `siyuan`：通用筛选标签。
 
-### 6. 当前已实现的初步开发内容
+本地映射丢失时可通过 Anki 标签反查恢复。
 
-- 初始化 `ankiLinker/` 插件工程。
-- 完成插件基础加载与 Vue 主界面挂载。
-- 实现 AnkiConnect 客户端。
-- 实现卡组与笔记类型远程拉取。
-- 实现本地配置与映射存储。
-- 实现同步预览逻辑。
-- 实现基础增量同步逻辑：
-  - 新增
-  - 更新
-  - 删除
-- 实现基于 Markdown 分隔线的正反面解析。
+### 5. Markdown / 渲染适配策略
+
+- 以 Markdown 语义为主，避免把公式和正文过早转成不可维护的富文本。
+- 写入 Anki 前统一重写思源 `/assets/...` 链接为绝对 URL。
+- 对普通模板：将基础有序 / 无序列表转换成 `<ol>/<ul>`，同时转义普通文本，降低列表纯文本显示概率。
+- 对 `KaTeX and Markdown Basic/Cloze`（Anki-KaTeX-Markdown add-on）：字段内容先 HTML 转义，再将换行替换为 `<br>`；该 add-on 的模板会在 `<pre>{{Field}}</pre>` 中把 `<br>` 还原为 `\n` 并交给 `markdown-it` 渲染。
+- 渲染策略改变会进入 hash 输入，确保受影响旧卡能进入更新队列。
+
+### 6. 已实现能力概览
+
+- 插件基础加载、顶栏入口、Vue 主面板与 i18n。
+- AnkiConnect 客户端、连接检测、卡组 / Note Type / 字段读取。
+- 原生思源闪卡自动发现与多来源合并。
+- QA / Cloze 两类 Anki 笔记映射。
+- 分隔符问答、思源高亮转 Anki Cloze、超级块首子块问答、子块兜底。
+- 路径分卡组、同步预览、同步进度、同步日志、删除诊断。
+- 配置导出 / 导入。
+- 安全删除保护、Anki 标签恢复、本地映射清理。
+- 资源链接重写与 Anki-KaTeX-Markdown 兼容。
 
 ### 7. 当前方案的边界
 
-当前版本还不是“完整自动识别思源原生闪卡”的最终版，而是一个**可导入测试、可联调 Anki 的第一阶段成品**。
+- 仍是手动同步工具，不监听思源闪卡变化自动同步。
+- 不维护 Anki 端模板，也不反向读取 Anki 编辑结果。
+- 思源资源以绝对 URL 方式引用，不会把附件复制到 Anki collection.media。
+- `siyuan://` 块跳转链接已验证在部分 Anki markdown 插件环境下不可可靠点击，除非额外维护 Anki 端 Python 插件，否则不建议恢复。
 
-主要边界：
+### 8. 后续方向
 
-- 目前使用手工输入块 ID 的方式管理同步来源。
-- 尚未深度接入思源原生闪卡数据库或属性模型。
-- 尚未处理复杂资源（图片、附件）自动迁移。
-- 尚未对多字段模型做更灵活映射。
-
-### 8. 下一阶段开发方向
-
-1. 研究思源原生闪卡来源结构与事件模型。  
-2. 自动发现闪卡，而不是手填块 ID。  
-3. 支持更多笔记类型字段映射。  
-4. 增加资源与图片处理。  
-5. 增加同步冲突恢复、失败重试与更详细报告。  
-6. 增加对标签、卡片模板建议、批量选择的支持。  
+1. 增加更明确的 Markdown 渲染模式设置，减少对 Note Type 名称的自动推断。
+2. 支持更复杂的列表 / 嵌套块 / 表格转换策略。
+3. 增加失败重试和更细粒度的同步报告导出。
+4. 可选支持资源复制到 Anki 媒体库。
+5. 若用户接受额外 Anki 插件，再考虑可靠的 `siyuan://` 跳转方案。
 
 ## 开发日志
+
+### 2026-05-17
+
+- 修复相邻 cloze 被错误合并的问题：`CLOZE_PATTERN` 从只要求两端非空白，进一步收紧为 `==((?=\S)(?:(?!==)[^\n])*?\S)==`，禁止内容跨行或包含下一组 `==` 分隔符。用户给出的 `局部变量存==栈==，成员变量存==堆/元空间==` 已能稳定生成两个独立 cloze。
+- 保留 inline / fenced code 屏蔽机制与 U+E000 占位符还原，避免代码段中的 `==` 参与 cloze 切分。
+- 新增 Anki 字段准备分层：`prepareMarkdownForAnki` 负责资源链接重写；`prepareAnkiFieldContent(markdown, noteType)` 按 Note Type 选择普通模板或 Anki-KaTeX-Markdown 策略。
+- 针对 Jwrede/Anki-KaTeX-Markdown：确认其模板使用 `<pre>{{Front}}</pre>` / `<pre>{{Text}}</pre>`，脚本会把 `<br>` 还原为换行后交给 `markdown-it`。因此对 `KaTeX and Markdown Basic/Cloze` 字段采用 `escapeHtml(...).replace(/\n/g, '<br>')`，解决列表和多行 Markdown 在该 add-on 下不渲染的问题。
+- 对普通 Anki 模板增加基础列表转换：连续有序列表和短横线无序列表转换为 `<ol>/<ul>`，普通文本 HTML 转义。
+- 将 `anki-katex-markdown-br-v1` 与 `anki-list-html-v1` 加入 hash 输入，使渲染策略变化可以触发既有卡片更新。
+- 修复 `.github/workflows/release.yml`：项目实际使用 `package-lock.json` 和 npm，旧 workflow 使用 pnpm 且无 `pnpm-lock.yaml`，容易在标签发布时失败；改为 Node 22 + `npm ci --legacy-peer-deps` + `npm run build`，并显式授予 `contents: write` 以创建 GitHub Release。
+- 发布 0.1.10：更新 `plugin.json` / `package.json` / `package-lock.json` / `CHANGELOG.md` / `develops.md` / README / workflow / `old view.md`，重新构建 `dist/` 与 `package.zip`。
 
 ### 2026-05-16
 

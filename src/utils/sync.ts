@@ -57,7 +57,7 @@ const KRAMDOWN_INLINE_IAL_PATTERN = /\s*\{:\s+[^\n{}]*\bid="[^"]+"[^\n{}]*\}/g
 const SIYUAN_LAYOUT_CONTAINER_OPEN_LINE_PATTERN = /^\s*\{\{\{[a-zA-Z][^\n]*$/gm
 const SIYUAN_LAYOUT_CONTAINER_CLOSE_LINE_PATTERN = /^\s*\}\}\}\s*$/gm
 const SIYUAN_SUPER_BLOCK_DETECT_PATTERN = /^\s*\{\{\{[a-zA-Z]/
-const CLOZE_PATTERN = /==(\S(?:.*?\S)?)==/g
+const CLOZE_PATTERN = /==((?=\S)(?:(?!==)[^\n])*?\S)==/g
 const INLINE_CODE_PATTERN = /`[^`\n]+`/g
 const BLOCK_CODE_PATTERN = /```[\s\S]*?```/g
 const CLOZE_MASK_PLACEHOLDER_PATTERN = /(\d+)/g
@@ -803,17 +803,120 @@ function escapeHtml(value: string) {
     .replace(/>/g, '&gt;')
 }
 
+const ORDERED_LIST_ITEM_PATTERN = /^\s*(\d+)[.)]\s+(.+)$/
+const DASH_LIST_ITEM_PATTERN = /^\s*-\s+(.+)$/
+
+function createHtmlList(tagName: 'ol' | 'ul', items: string[], start?: number) {
+  const startAttr = tagName === 'ol' && start && start > 1 ? ` start="${start}"` : ''
+  return `<${tagName}${startAttr}>${items.map(item => `<li>${escapeHtml(item.trim())}</li>`).join('')}</${tagName}>`
+}
+
+function normalizeListBlocksForAnki(markdown: string) {
+  const lines = String(markdown || '').split('\n')
+  const output: string[] = []
+
+  for (let index = 0; index < lines.length;) {
+    const orderedMatch = lines[index].match(ORDERED_LIST_ITEM_PATTERN)
+    const dashMatch = lines[index].match(DASH_LIST_ITEM_PATTERN)
+
+    if (orderedMatch) {
+      const items: string[] = []
+      const start = Number(orderedMatch[1])
+      while (index < lines.length) {
+        const match = lines[index].match(ORDERED_LIST_ITEM_PATTERN)
+        if (!match) break
+        items.push(match[2])
+        index += 1
+      }
+      output.push(createHtmlList('ol', items, start))
+      continue
+    }
+
+    if (dashMatch) {
+      const items: string[] = []
+      while (index < lines.length) {
+        const match = lines[index].match(DASH_LIST_ITEM_PATTERN)
+        if (!match) break
+        items.push(match[1])
+        index += 1
+      }
+      output.push(createHtmlList('ul', items))
+      continue
+    }
+
+    output.push(escapeHtml(lines[index]))
+    index += 1
+  }
+
+  return output.join('\n')
+}
+
+function isKaTeXMarkdownNoteType(noteType: string) {
+  return /katex\s+and\s+markdown/i.test(String(noteType || ''))
+}
+
+function prepareKaTeXMarkdownFieldContent(markdown: string) {
+  return escapeHtml(prepareMarkdownForAnki(markdown)).replace(/\n/g, '<br>')
+}
+
+function prepareAnkiFieldContent(markdown: string, noteType = '') {
+  if (isKaTeXMarkdownNoteType(noteType)) {
+    return prepareKaTeXMarkdownFieldContent(markdown)
+  }
+
+  return normalizeListBlocksForAnki(prepareMarkdownForAnki(markdown))
+}
+
+function hasAnkiHtmlNormalizedList(markdown: string) {
+  return String(markdown || '').split('\n').some(line => ORDERED_LIST_ITEM_PATTERN.test(line) || DASH_LIST_ITEM_PATTERN.test(line))
+}
+
+function createCandidateHashInput(
+  kind: FlashcardKind,
+  rawMarkdown: string,
+  clozeText: string,
+  front: string,
+  back: string,
+  targetDeckName: string,
+  noteType: string,
+) {
+  const baseContent = clozeText || rawMarkdown
+  if (isKaTeXMarkdownNoteType(noteType)) {
+    return [
+      kind,
+      'anki-katex-markdown-br-v1',
+      prepareAnkiFieldContent(baseContent, noteType),
+      prepareAnkiFieldContent(front, noteType),
+      prepareAnkiFieldContent(back, noteType),
+      targetDeckName,
+    ].join(':')
+  }
+
+  if (!hasAnkiHtmlNormalizedList(baseContent) && !hasAnkiHtmlNormalizedList(front) && !hasAnkiHtmlNormalizedList(back)) {
+    return `${kind}:${baseContent}:${targetDeckName}`
+  }
+
+  return [
+    kind,
+    'anki-list-html-v1',
+    prepareAnkiFieldContent(baseContent, noteType),
+    prepareAnkiFieldContent(front, noteType),
+    prepareAnkiFieldContent(back, noteType),
+    targetDeckName,
+  ].join(':')
+}
+
 function buildAnkiFields(candidate: FlashcardCandidate, settings: AnkiLinkerSettings) {
   if (candidate.kind === 'cloze') {
     return {
-      [settings.clozeTextField]: escapeHtml(prepareMarkdownForAnki(String(candidate.clozeText || candidate.rawMarkdown || '').trim())),
-      [settings.clozeExtraField]: escapeHtml(prepareMarkdownForAnki(String(candidate.back || '').trim())),
+      [settings.clozeTextField]: prepareAnkiFieldContent(String(candidate.clozeText || candidate.rawMarkdown || '').trim(), candidate.noteType),
+      [settings.clozeExtraField]: prepareAnkiFieldContent(String(candidate.back || '').trim(), candidate.noteType),
     }
   }
 
   return {
-    [settings.qaFrontField]: escapeHtml(prepareMarkdownForAnki(String(candidate.front || '').trim())),
-    [settings.qaBackField]: escapeHtml(prepareMarkdownForAnki(String(candidate.back || '').trim())),
+    [settings.qaFrontField]: prepareAnkiFieldContent(String(candidate.front || '').trim(), candidate.noteType),
+    [settings.qaBackField]: prepareAnkiFieldContent(String(candidate.back || '').trim(), candidate.noteType),
   }
 }
 
@@ -848,7 +951,7 @@ export async function collectFlashcardCandidates(cards: ICard[], settings?: Anki
     const [kramdown, attrs, hPath] = await Promise.all([
       getBlockKramdown(card.blockID),
       getBlockAttrs(card.blockID),
-      getHPathByID(card.blockID).catch(() => ''),
+            getHPathByID(card.blockID).catch(() => ''),
     ])
 
     const rawKramdown = String(kramdown?.kramdown || '').trim()
@@ -856,6 +959,7 @@ export async function collectFlashcardCandidates(cards: ICard[], settings?: Anki
     const rawMarkdown = sanitizeSiyuanMarkdown(rawKramdown)
     const parsed = await parseFlashcardCandidate(card, rawMarkdown, isSuperBlock)
     const targetDeckName = settings ? resolveDeckNameByPath(String(hPath || ''), settings) : ''
+    const noteType = parsed.kind === 'cloze' ? (settings?.clozeNoteType || 'Cloze') : (settings?.qaNoteType || 'Basic')
 
     const draftCandidate: FlashcardCandidate = {
       cardId: card.cardID,
@@ -869,10 +973,18 @@ export async function collectFlashcardCandidates(cards: ICard[], settings?: Anki
       back: parsed.preview?.back || '',
       attrs: attrs || {},
       isValid: Boolean(parsed.preview),
-      hash: createHashValue(`${parsed.kind}:${parsed.clozeText || rawMarkdown}:${targetDeckName}`),
+      hash: createHashValue(createCandidateHashInput(
+        parsed.kind,
+        rawMarkdown,
+        parsed.clozeText,
+        parsed.preview?.front || '',
+        parsed.preview?.back || '',
+        targetDeckName,
+        noteType,
+      )),
       identityKind: String(card.cardID || '').startsWith('block:') ? 'block' : 'card',
       kind: parsed.kind,
-      noteType: parsed.kind === 'cloze' ? (settings?.clozeNoteType || 'Cloze') : (settings?.qaNoteType || 'Basic'),
+      noteType,
       clozeText: parsed.clozeText,
       validationMessage: '',
     }

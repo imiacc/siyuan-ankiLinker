@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.10
+
+- 修复相邻填空解析：cloze 正则改为不跨行且不吞入下一组 `==` 分隔符，避免 `==栈==，成员变量存==堆/元空间==` 被错误合并成一段填空。
+- 改进同步到 Anki 的字段内容准备：先统一重写思源 `/assets/...` 链接，再按目标 Note Type 选择渲染兼容策略。
+- 增加对 `KaTeX and Markdown Basic` / `KaTeX and Markdown Cloze`（Anki-KaTeX-Markdown add-on）的特殊兼容：字段内容 HTML 转义后将换行写为 `<br>`，让该模板脚本在 `<pre>{{Field}}</pre>` 内还原 Markdown 换行并正确渲染列表、公式与填空。
+- 对普通模板增加基础 Markdown 列表保护：连续 `1. item` / `1) item` 与 `- item` 行在写入 Anki 前转换为 `<ol>/<ul>`，降低 Anki 端直接显示纯文本列表的概率。
+- 将渲染策略版本纳入候选 hash（`anki-katex-markdown-br-v1` / `anki-list-html-v1`），使受影响的既有卡片能在同步预览中进入「更新」队列。
+- 更新 README、README_zh_CN、develops.md 与 AI 快速引导文档，修正过期描述；修复 GitHub tag release workflow 改用 npm/package-lock；版本号提升到 0.1.10，重新构建发布产物。
+
 ## 0.1.9
 
 - 新增「同步进度」显示：在「同步预览」面板下方追加一行小字状态文本，与「思源闪卡状态」面板下的提示样式一致。插件启动 / 点击预览后显示「就绪」，点击同步后显示「同步中：百分比%」并随实际进度更新，同步完成显示「完成」；同步失败回退到「就绪」。

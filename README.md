@@ -5,7 +5,7 @@
 SiYuan flashcard one-way sync plugin for local Anki.
 
 - Plugin ID / manual install folder: `siyuan-ankiLinker`
-- Repository: <https://github.com/imiacc/imiacc/siyuan-ankiLinker>
+- Repository: <https://github.com/imiacc/siyuan-ankiLinker>
 - Author: `imiacc`
 
 ## Overview
@@ -25,7 +25,7 @@ The sync direction is strictly **SiYuan → Anki**. The plugin never writes back
 
 The repository name and plugin ID are both `siyuan-ankiLinker`. When installing manually, name the plugin directory exactly `siyuan-ankiLinker`.
 
-The plugin only reads/writes data tagged with its current identity (`siyuan-anki-linker`). It does not migrate or clean up data from older plugin variants.
+The plugin stores its own settings in SiYuan plugin storage (`settings.json` and `mappings.json`) and identifies synced Anki notes with the `siyuan-anki-linker` tag. A full uninstall removes only this plugin's current storage files; normal disable, reload, and upgrade operations keep them.
 
 ## Features
 
@@ -39,6 +39,8 @@ The plugin only reads/writes data tagged with its current identity (`siyuan-anki
 - Deletion diagnostics: inspect orphaned mappings and whether deletion is safe before running sync.
 - Path-rule summary view with edit / done states and right-aligned action buttons.
 - Sync progress indicator: shows `Sync Progress: Ready / Syncing N% / Done` under the sync preview panel, useful when the card count grows large.
+- Rewrites SiYuan asset links before writing fields to Anki.
+- Provides compatibility handling for Markdown rendering templates, including the `Anki-KaTeX-Markdown` note types.
 
 ## Supported card formats
 
@@ -74,7 +76,7 @@ becomes
 The closest planet to the sun is {{c1::Mercury}}.
 ```
 
-The cloze regex requires `==` to be adjacent to non-whitespace on both sides, matching SiYuan's own highlight rule. Inline `` `…` `` and fenced ```` ```…``` ```` code spans are masked before cloze detection, so `==` inside code never becomes a cloze marker.
+The cloze regex requires `==` to be adjacent to non-whitespace on both sides, matching SiYuan's own highlight rule. A single cloze match cannot cross a line or contain another `==` delimiter, so adjacent highlights such as `==stack==, ==heap==` are kept as separate Cloze deletions. Inline `` `…` `` and fenced ```` ```…``` ```` code spans are masked before cloze detection, so `==` inside code never becomes a cloze marker.
 
 ### Fallback child block
 
@@ -115,9 +117,16 @@ The plugin does not assume any specific field layout. For each chosen note type 
 
 This avoids errors such as `cannot create note because it is empty` caused by manually typed field names.
 
-## Asset link rewriting
+## Markdown rendering and assets
 
 When writing content to Anki, SiYuan `/assets/…` references are rewritten to absolute URLs against the current SiYuan host, so images and attachments resolve correctly from Anki's renderer.
+
+Field content is prepared according to the target note type:
+
+- For `KaTeX and Markdown Basic` / `KaTeX and Markdown Cloze` from the Anki-KaTeX-Markdown add-on, the plugin escapes user HTML and stores line breaks as `<br>`. That add-on restores `<br>` back to Markdown newlines inside its `<pre>{{Field}}</pre>` templates before rendering with `markdown-it`.
+- For other templates, basic ordered and unordered Markdown list blocks are converted to `<ol>` / `<ul>` HTML to improve list display in Anki fields.
+
+If this rendering strategy changes, the generated card hash also changes so existing affected notes appear as `updated` in the sync preview.
 
 ## Usage
 
@@ -156,8 +165,8 @@ Disable / reload / upgrade does not touch this data, so routine development and 
 ## Build
 
 ```powershell
-D:\Environment\nodejs22\npm.cmd install
-D:\Environment\nodejs22\npx.cmd vite build
+D:\Environment\nodejs22\npm.cmd install --legacy-peer-deps
+D:\Environment\nodejs22\npm.cmd run build
 ```
 
 Generated output:

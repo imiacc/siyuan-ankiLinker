@@ -25,7 +25,7 @@
 
 仓库名与插件 ID 均为 `siyuan-ankiLinker`，手动安装时插件目录必须严格命名为 `siyuan-ankiLinker`。
 
-插件只读写自己当前标签（`siyuan-anki-linker`）下的数据，不会迁移或清理旧插件变体的数据。
+插件只读写自己当前标签（`siyuan-anki-linker`）下的数据，并把配置保存在思源插件存储中的 `settings.json` / `mappings.json`。完整卸载只清理当前插件的数据；普通禁用、重载、升级不会清理配置与映射。
 
 ## 功能
 
@@ -39,6 +39,7 @@
 - 删除判定诊断：在执行同步前查看孤儿映射与命中情况，确认删除是否安全。
 - 路径规则摘要行支持编辑 / 完成两种状态，右侧操作按钮齐整对齐。
 - 同步进度提示：在同步预览面板下方显示「同步进度：就绪 / 同步中 N% / 完成」，闪卡数量较多时可追踪进度。
+- 写入 Anki 前重写思源资源链接，并兼容常见 Markdown 模板与 `Anki-KaTeX-Markdown` 的 `KaTeX and Markdown Basic/Cloze` 模板。
 
 ## 卡片识别规则
 
@@ -74,7 +75,7 @@
 地球离太阳最近的行星是 {{c1::水星}}。
 ```
 
-Cloze 正则要求 `==` 两侧紧邻非空白字符，与思源自身高亮规则一致。在 cloze 检测前，行内 `` `…` `` 与围栏 ```` ```…``` ```` 代码段会被屏蔽，因此代码段内的 `==` 不会被当作 cloze 标记。
+Cloze 正则要求 `==` 两侧紧邻非空白字符，与思源自身高亮规则一致；单次匹配不会跨行，也不能吞入下一组 `==` 分隔符，因此 `==栈==，成员变量存==堆/元空间==` 会稳定生成两个独立填空。在 cloze 检测前，行内 `` `…` `` 与围栏 ```` ```…``` ```` 代码段会被屏蔽，因此代码段内的 `==` 不会被当作 cloze 标记。
 
 ### 子块兜底
 
@@ -121,9 +122,16 @@ Cloze 正则要求 `==` 两侧紧邻非空白字符，与思源自身高亮规�
 
 这能避免手填字段名导致的 `cannot create note because it is empty` 等错误。
 
-## 资源链接重写
+## Markdown 渲染与资源链接
 
 写入 Anki 时，思源 `/assets/…` 引用会被重写为基于当前思源主机的绝对 URL，便于 Anki 渲染端访问图片与附件。
+
+字段内容会按目标 Note Type 使用不同准备策略：
+
+- 对 Anki-KaTeX-Markdown 插件提供的 `KaTeX and Markdown Basic` / `KaTeX and Markdown Cloze`，插件会先转义用户 HTML，再把换行写成 `<br>`。该 add-on 的模板会在 `<pre>{{Field}}</pre>` 内把 `<br>` 还原成 Markdown 换行，再交给 `markdown-it` 渲染，从而保持列表、公式与填空内容可用。
+- 对其他模板，基础有序 / 无序 Markdown 列表会转换为 `<ol>` / `<ul>` HTML，降低 Anki 端把列表直接显示为纯文本的概率。
+
+渲染策略变化会进入卡片 hash，因此升级后受影响的既有卡片会在同步预览中显示为「更新」。
 
 ## 使用步骤
 
@@ -163,7 +171,7 @@ Cloze 正则要求 `==` 两侧紧邻非空白字符，与思源自身高亮规�
 
 ```powershell
 D:\Environment\nodejs22\npm.cmd install --legacy-peer-deps
-D:\Environment\nodejs22\npx.cmd vite build
+D:\Environment\nodejs22\npm.cmd run build
 ```
 
 构建完成后会生成：
