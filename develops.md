@@ -50,7 +50,15 @@
 - QA / Cloze Note Type 与字段映射。
 - 路径分卡组规则。
 
-同步映射保存到 `mappings.json`，记录 SiYuan card/block 身份、Anki noteId、卡组、模型、内容 hash 与时间戳。
+#### 映射持久化层
+
+同步映射不再写入单一 `mappings.json`，而是拆分为：
+
+- `mappings.index.json`：分片索引与 checksum 元数据。
+- `mappings.part-*.json`：按稳定哈希路由后的映射分片。
+- `mappings.backup.json`：完整 `AnkiLinkerMapping[]` 恢复快照。
+
+旧版 `mappings.json` 会在首次加载时自动迁移到新结构；分片读失败时可从备份自动恢复。
 
 #### 同步层
 
@@ -68,7 +76,10 @@
 本地持久化：
 
 - `settings.json`：配置。
-- `mappings.json`：`cardId/blockId -> anki noteId` 映射、hash、卡组、模型。
+- `mappings.index.json`：分片索引。
+- `mappings.part-*.json`：映射分片。
+- `mappings.backup.json`：完整恢复快照。
+- `mappings.json`：仅保留旧版兼容导入入口，升级后会自动迁移。
 
 Anki 笔记写入标签：
 
@@ -114,6 +125,22 @@ Anki 笔记写入标签：
 5. 若用户接受额外 Anki 插件，再考虑可靠的 `siyuan://` 跳转方案。
 
 ## 开发日志
+
+### 2026-06-23
+
+- 发布 `0.2.0`：同步更新 `plugin.json` / `package.json` / `package-lock.json` 版本号，重新构建 `dist/` 与 `package.zip`。
+- 完成映射持久化重构：新增 `src/utils/storage.ts`，把原来的单文件 `mappings.json` 拆分为 `mappings.index.json` + `mappings.part-*.json` 分片，并保留 `mappings.backup.json` 作为完整映射快照；设置继续单独保存到 `settings.json`。
+- 新存储层支持：旧版 `mappings.json` 首次加载时自动迁移；分片缺失或 checksum 校验失败时自动从 `mappings.backup.json` 恢复并重建分片；卸载时统一清理 `settings.json`、`mappings.index.json`、`mappings.part-*.json`、`mappings.backup.json`。
+- 修复思源 `v3.6.5` 的 notebook 查询兼容问题：`src/api.ts` 中 `lsNotebooks()` 请求体从空字符串改为 `{}`；`App.vue` 不再在插件启动时立即刷新路径树，而是改成仅在路径规则面板需要时才懒加载。
+- 继续修复 `Refresh Paths` 报错链路：路径刷新时跳过 `closed` 笔记本，对单个笔记本 / 子路径的失败做局部隔离，并把 `notebookName`、`notebookId`、`currentPath`、`docPath` / `childPath` 写入日志，便于定位导致 `Query notebook failed v3.6.5` 的具体对象。
+- 同步更新 `README.md`、`README_zh_CN.md` 与仓库根 `old view.md`，把新的存储结构、路径刷新行为和维护注意事项记录给下一次维护。
+
+### 2026-05-18
+
+- 复查 Linux 迁移后的本地环境：项目根已迁到 `/home/ly/Projects/SiYuanKitT/siyuan-ankiLinker`，当前机器为 `Linux x86_64`，`node v26.3.1`、`npm 11.16.0` 均可用。
+- 同步更新维护文档：`old view.md`、`README.md`、`README_zh_CN.md` 改为以 Linux shell 命令为默认维护口径，并去掉旧的 Windows `npm.cmd` 路径示例。
+- 项目范围内修复本地构建问题：删除并重装仓库内 `node_modules` 后，补齐了 Rollup 的 Linux 可选原生包，`npm run build` 已重新通过，成功产出 `dist/` 与 `package.zip`。
+- 当前仍建议把本地 Node 版本收敛到 CI 使用的 Node 22，减少与 `.github/workflows/release.yml` 的环境偏差；但这不再是当前构建的阻塞项。
 
 ### 2026-05-17
 

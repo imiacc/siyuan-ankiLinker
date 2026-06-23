@@ -1,6 +1,6 @@
 {
   "name": "siyuan-ankiLinker",
-  "version": "0.1.10",
+  "version": "0.2.0",
   "type": "module",
   "description": "Sync SiYuan flashcards to local Anki via AnkiConnect",
   "author": "imiacc",

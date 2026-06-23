@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.0
+
+- 将同步映射持久化从单文件 `mappings.json` 升级为分片存储：保留 `settings.json` 作为配置文件，引入 `mappings.index.json`、`mappings.part-*.json` 与 `mappings.backup.json`，支持旧版 `mappings.json` 自动迁移、校验失败时从完整备份恢复，以及完整卸载时清理新存储文件。
+- 修复思源 `v3.6.5` 下的 notebook 查询兼容问题：`lsNotebooks()` 改为发送 `{}`；路径规则 UI 不再在插件启动时立即递归扫描全部文档路径，而是改成按需懒加载。
+- 加强 `Refresh Paths` 的健壮性与可排错性：跳过已关闭笔记本，按笔记本 / 路径粒度隔离错误，并在日志中输出 `notebookName`、`notebookId`、`currentPath`、`docPath` / `childPath`，避免单个异常笔记本拖垮整次刷新。
+- 更新 `README.md`、`README_zh_CN.md`、`develops.md` 与 `old view.md` 的维护说明；版本号提升到 `0.2.0`，重新构建 `dist/` 与 `package.zip`。
+
 ## 0.1.10
 
 - 修复相邻填空解析：cloze 正则改为不跨行且不吞入下一组 `==` 分隔符，避免 `==栈==，成员变量存==堆/元空间==` 被错误合并成一段填空。

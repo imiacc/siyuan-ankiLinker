@@ -25,7 +25,7 @@
 
 仓库名与插件 ID 均为 `siyuan-ankiLinker`，手动安装时插件目录必须严格命名为 `siyuan-ankiLinker`。
 
-插件只读写自己当前标签（`siyuan-anki-linker`）下的数据，并把配置保存在思源插件存储中的 `settings.json` / `mappings.json`。完整卸载只清理当前插件的数据；普通禁用、重载、升级不会清理配置与映射。
+插件只读写自己当前标签（`siyuan-anki-linker`）下的数据。配置继续保存在思源插件存储的 `settings.json`；映射改为保存在 `mappings.index.json` 与多个 `mappings.part-*.json` 分片文件中，并额外保留 `mappings.backup.json` 作为恢复快照。旧版本遗留的 `mappings.json` 会在升级后首次打开插件时自动迁移。完整卸载只清理当前插件的数据；普通禁用、重载、升级不会清理配置与映射。
 
 ## 功能
 
@@ -106,6 +106,8 @@ Cloze 正则要求 `==` 两侧紧邻非空白字符，与思源自身高亮规�
 
 第一条命中的规则生效。如果都没命中，使用默认目标卡组。
 
+点击「刷新路径」时，插件只会扫描当前处于打开状态的笔记本，已关闭笔记本会被跳过。如果某个笔记本或子路径在扫描时失败，刷新不会整体中断，面板日志会记录失败的 `notebookName`、`notebookId`、`currentPath`、`docPath` / `childPath`，便于排查。
+
 建议：
 
 - 用相对稳定的目录前缀配置规则。
@@ -163,16 +165,28 @@ Cloze 正则要求 `==` 两侧紧邻非空白字符，与思源自身高亮规�
 完整卸载时，插件会清理自己在思源插件数据目录下创建的持久化文件：
 
 - `settings.json`
-- `mappings.json`
+- `mappings.index.json`
+- `mappings.part-*.json`
+- `mappings.backup.json`
+
+旧版 `mappings.json` 会为兼容升级而保留，并在插件首次打开时自动迁移到新的分片存储结构。
 
 普通禁用、重载、版本升级**不会**触发这些清理，避免日常操作意外丢失配置。
 
 ## 构建
 
-```powershell
-D:\Environment\nodejs22\npm.cmd install --legacy-peer-deps
-D:\Environment\nodejs22\npm.cmd run build
+```bash
+npm install --legacy-peer-deps
+npm run build
 ```
+
+当前本地环境已迁移到 Linux，日常维护文档默认使用 Linux shell 命令。
+
+当前迁移后的注意事项：
+
+- 本机 `npm` 已可用。
+- 此前 Linux 下因缺少 Rollup 可选原生包导致的构建失败，已通过在项目目录内重装依赖修复。
+- 若后续再次遇到同类报错，应优先做一次干净的依赖重装，并尽量让本地 Node 版本与 `.github/workflows/release.yml` 中的 CI 基线保持一致。
 
 构建完成后会生成：
 

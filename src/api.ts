@@ -18,7 +18,7 @@ async function request(url: string, data: any) {
 
 export async function lsNotebooks(): Promise<IReslsNotebooks> {
   let url = "/api/notebook/lsNotebooks";
-  return request(url, "");
+  return request(url, {});
 }
 
 export async function openNotebook(notebook: NotebookId) {

@@ -25,7 +25,7 @@ The sync direction is strictly **SiYuan → Anki**. The plugin never writes back
 
 The repository name and plugin ID are both `siyuan-ankiLinker`. When installing manually, name the plugin directory exactly `siyuan-ankiLinker`.
 
-The plugin stores its own settings in SiYuan plugin storage (`settings.json` and `mappings.json`) and identifies synced Anki notes with the `siyuan-anki-linker` tag. A full uninstall removes only this plugin's current storage files; normal disable, reload, and upgrade operations keep them.
+The plugin stores its own settings in SiYuan plugin storage. Settings remain in `settings.json`; mappings are stored in `mappings.index.json` plus multiple `mappings.part-*.json` shards, with `mappings.backup.json` kept as a recovery snapshot. Existing `mappings.json` data from previous versions is migrated automatically on first load. The plugin identifies synced Anki notes with the `siyuan-anki-linker` tag. A full uninstall removes only this plugin's current storage files; normal disable, reload, and upgrade operations keep them.
 
 ## Features
 
@@ -107,6 +107,8 @@ Each flashcard's owning document path (`hPath`) is matched against your configur
 
 Matching is `startsWith`. The first matching rule wins. If no rule matches, the default target deck is used.
 
+When you click **Refresh Paths**, the plugin scans only open notebooks. Closed notebooks are skipped. If a notebook or sub-path fails during scanning, the refresh continues and the plugin logs the failing `notebookName`, `notebookId`, `currentPath`, and `docPath` / `childPath` in the panel log for troubleshooting.
+
 ## Template and field selection
 
 The plugin does not assume any specific field layout. For each chosen note type it:
@@ -158,16 +160,28 @@ A `siyuan` tag is also written for general filtering.
 A full uninstall removes the plugin's own persisted data:
 
 - `settings.json`
-- `mappings.json`
+- `mappings.index.json`
+- `mappings.part-*.json`
+- `mappings.backup.json`
+
+Older `mappings.json` data is preserved for compatibility and migrated automatically when the plugin first opens after upgrade.
 
 Disable / reload / upgrade does not touch this data, so routine development and version upgrades do not wipe your config.
 
 ## Build
 
-```powershell
-D:\Environment\nodejs22\npm.cmd install --legacy-peer-deps
-D:\Environment\nodejs22\npm.cmd run build
+```bash
+npm install --legacy-peer-deps
+npm run build
 ```
+
+Current local environment is Linux. Daily maintenance docs now use Linux shell commands by default.
+
+Current migration note:
+
+- `npm` is available on this machine.
+- The earlier Linux build failure caused by a missing Rollup optional native package was resolved by reinstalling project dependencies inside this repository.
+- If the same error reappears later, do a clean dependency reinstall first and prefer aligning local Node with the CI baseline in `.github/workflows/release.yml`.
 
 Generated output:
 

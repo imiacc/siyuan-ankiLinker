@@ -1,17 +1,16 @@
 import { Plugin, getFrontend } from "siyuan"
 import "@/index.scss"
 import PluginInfoString from "@/../plugin.json"
-import { removeFile } from "@/api"
 import { destroy, init, showPanel } from "@/main"
+import { clearStorageData } from "@/utils/storage"
+
+
 import topbarIcon from "@/../asset/topbar-icon.svg?raw"
 
 const TOPBAR_ICON_NAME = "iconSiyuanAnkiLinker"
 const PLUGIN_RUNTIME_KEY = "_sy_siyuan_ankiLinker"
-const SETTINGS_STORAGE_KEY = "settings.json"
-const MAPPINGS_STORAGE_KEY = "mappings.json"
-const STORAGE_KEYS = [SETTINGS_STORAGE_KEY, MAPPINGS_STORAGE_KEY] as const
-const STORAGE_DIR = "siyuan-ankiLinker"
 const DEFAULT_TOPBAR_TITLE = "Anki Linker"
+
 const DEFAULT_PANEL_TITLE = "Anki Linker"
 const DEFAULT_PANEL_SUBTITLE = "Sync SiYuan flashcards to local Anki via AnkiConnect"
 
@@ -89,17 +88,13 @@ export default class SiyuanAnkiLinkerPlugin extends Plugin {
     cleanupRuntimeState()
   }
 
-  async uninstall() {
-    const storageBasePath = `/data/storage/petal/${STORAGE_DIR}`
-    await Promise.allSettled([
-      ...STORAGE_KEYS.map(key => this.removeData(key)),
-      ...STORAGE_KEYS.map(key => removeFile(`${storageBasePath}/${key}`)),
-    ])
-    await removeFile(storageBasePath).catch(() => null)
+        async uninstall() {
+    await clearStorageData(this)
     cleanupRuntimeState()
   }
 
   openSetting() {
+
     showPanel()
   }
 }

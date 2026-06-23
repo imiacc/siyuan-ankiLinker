@@ -276,6 +276,7 @@ import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { hidePanel, usePlugin } from '@/main'
 import { createAnkiClient } from '@/utils/anki'
 import { buildDeletionDiagnostics, buildSyncPreview, cleanupInvalidMappings, getAvailableCards, getCardDiagnostics, runSync } from '@/utils/sync'
+import { loadPersistedState, saveMappings as persistMappingsData, saveSettings as persistSettingsData } from '@/utils/storage'
 import { getPluginI18n } from '@/index'
 import type { AnkiLinkerMapping, AnkiLinkerSettings, DeletionDiagnosticsFilter, DeletionDiagnosticsResult, PathDeckRule, SyncLogItem, SyncPreviewResult } from '@/types/plugin'
 
@@ -304,8 +305,7 @@ type PathSearchState = {
 }
 
 const PLUGIN_RUNTIME_KEY = '_sy_siyuan_ankiLinker'
-const SETTINGS_STORAGE_KEY = 'settings.json'
-const MAPPINGS_STORAGE_KEY = 'mappings.json'
+
 
 const plugin = usePlugin()
 const locale = reactive({
@@ -403,6 +403,8 @@ const qaFieldOptions = ref<SelectOption[]>([{ value: 'Front', text: 'Front' }, {
 const clozeFieldOptions = ref<SelectOption[]>([{ value: 'Text', text: 'Text' }, { value: 'Extra', text: 'Extra' }])
 const pathSearchOptions = ref<SelectOption[]>([])
 const pathTreeRoots = ref<PathTreeNode[]>([])
+const hasLoadedPathOptions = ref(false)
+const isLoadingPathOptions = ref(false)
 const rulePathSearchStates = ref<PathSearchState[]>([])
 const ruleEditStates = ref<boolean[]>([])
 const logs = ref<SyncLogItem[]>([])
@@ -665,7 +667,7 @@ function clearRulePath(index: number) {
   rulePathSearchStates.value[index].keyword = ''
 }
 
-async function collectNotebookPaths(notebookId: string, currentPath: string, result: Set<string>) {
+async function collectNotebookPaths(notebookId: string, currentPath: string, result: Set<string>, notebookName: string) {
   const docs = await listDocsByPath(notebookId, currentPath)
   for (const doc of docs) {
     const docPath = String(doc.path || '').trim()
@@ -673,7 +675,11 @@ async function collectNotebookPaths(notebookId: string, currentPath: string, res
 
     let hPath = String(doc.hPath || '').trim()
     if (!hPath && docPath) {
-      hPath = String(await getHPathByPath(notebookId, docPath).catch(() => '') || '').trim()
+      try {
+        hPath = String(await getHPathByPath(notebookId, docPath) || '').trim()
+      } catch (error) {
+        addLog(`读取路径失败：笔记本 ${notebookName}（${notebookId}） currentPath=${currentPath} docPath=${docPath} error=${String(error)}`)
+      }
     }
     if (!hPath && docPath.endsWith('.sy')) {
       hPath = `/${docPath.split('/').pop()?.replace(/\.sy$/i, '') || docPath}`
@@ -684,12 +690,22 @@ async function collectNotebookPaths(notebookId: string, currentPath: string, res
     }
 
     if (isDir && docPath) {
-      await collectNotebookPaths(notebookId, docPath, result)
+      try {
+        await collectNotebookPaths(notebookId, docPath, result, notebookName)
+      } catch (error) {
+        addLog(`扫描子路径失败：笔记本 ${notebookName}（${notebookId}） currentPath=${currentPath} childPath=${docPath} error=${String(error)}`)
+      }
     }
   }
 }
 
 const refreshPathOptions = async () => {
+  if (isLoadingPathOptions.value) {
+    return
+  }
+
+  isLoadingPathOptions.value = true
+
   try {
     const notebooksPayload = await lsNotebooks()
     const notebooks = Array.isArray((notebooksPayload as any)?.notebooks) ? (notebooksPayload as any).notebooks : []
@@ -698,10 +714,17 @@ const refreshPathOptions = async () => {
 
     for (const notebook of notebooks) {
       const notebookId = String(notebook.id || '').trim()
-      if (!notebookId) {
+      const notebookName = String(notebook.name || notebookId).trim()
+      const isClosed = Boolean(notebook.closed)
+      if (!notebookId || isClosed) {
         continue
       }
-      await collectNotebookPaths(notebookId, '/', pathSet)
+
+            try {
+        await collectNotebookPaths(notebookId, '/', pathSet, notebookName)
+      } catch (error) {
+        addLog(`跳过笔记本 ${notebookName}（${notebookId}）的路径刷新：rootPath=/ error=${String(error)}`)
+      }
     }
 
     const sortedPaths = [...pathSet].sort((a, b) => a.localeCompare(b, 'zh-CN'))
@@ -719,11 +742,22 @@ const refreshPathOptions = async () => {
       }
     })
     syncRuleSearchStates()
+    hasLoadedPathOptions.value = true
 
     addLog(`已读取思源文档路径：${sortedPaths.length} 项`)
   } catch (error) {
     addLog(`读取思源文档树失败：${String(error)}`)
+  } finally {
+    isLoadingPathOptions.value = false
   }
+}
+
+const ensurePathOptionsLoaded = async () => {
+  if (hasLoadedPathOptions.value || isLoadingPathOptions.value) {
+    return
+  }
+
+  await refreshPathOptions()
 }
 
 const addPathRule = () => {
@@ -731,6 +765,7 @@ const addPathRule = () => {
   rulePathSearchStates.value.push({ keyword: '', selectedPath: '', basePath: '' })
   ruleEditStates.value.push(true)
   showPathRules.value = true
+  void ensurePathOptionsLoaded()
 }
 
 const startEditPathRule = (index: number) => {
@@ -751,13 +786,14 @@ const cleanupMappings = async () => {
   try {
     const result = await cleanupInvalidMappings(settings, mappings.value)
     mappings.value = result.mappings
-    await persistState()
+    await persistMappings()
     addLog(`映射清理完成：移除 ${result.removedCount} 条，修复 ${result.repairedCount} 条，保留 ${result.mappings.length} 条`)
     await refreshCardStats()
   } catch (error) {
     addLog(`清理失效映射失败：${String(error)}`)
   }
 }
+
 
 const refreshDeletionDiagnostics = async () => {
   try {
@@ -784,18 +820,20 @@ const refreshCardStats = async () => {
   addLog(`闪卡来源统计：Riff API ${detail.apiCount} 张，事件缓存 ${detail.cachedCount} 张，制卡块扫描 ${detail.blockScanCount} 张，可用闪卡 ${available.length} 张，当前映射 ${mappings.value.length} 条，SQL 兜底 ${detail.sqlCount} 张`)
 }
 
-const persistState = async () => {
+const persistSettings = async () => {
   const settingsPayload: AnkiLinkerSettings = {
     ...settings,
     pathDeckRules: [...settings.pathDeckRules],
   }
-  const mappingsPayload: AnkiLinkerMapping[] = [...mappings.value]
 
-  await Promise.all([
-    plugin.saveData(SETTINGS_STORAGE_KEY, settingsPayload),
-    plugin.saveData(MAPPINGS_STORAGE_KEY, mappingsPayload),
-  ])
+  await persistSettingsData(plugin, settingsPayload)
 }
+
+const persistMappings = async () => {
+  const mappingsPayload: AnkiLinkerMapping[] = [...mappings.value]
+  await persistMappingsData(plugin, mappingsPayload)
+}
+
 
 const buildSettingsExportPayload = (): ExportedSettingsFile => ({
   version: 1,
@@ -853,9 +891,9 @@ const importSettingsFromFile = async (event: Event) => {
     const text = await file.text()
     const parsed = JSON.parse(text) as Partial<ExportedSettingsFile> | Partial<AnkiLinkerSettings>
     const settingsPayload = 'settings' in (parsed || {}) ? parsed.settings : parsed
-    applyImportedSettings(settingsPayload as Partial<AnkiLinkerSettings>)
+        applyImportedSettings(settingsPayload as Partial<AnkiLinkerSettings>)
     await refreshRemoteMeta()
-    await persistState()
+    await persistSettings()
     addLog(`已导入配置文件：${file.name}`)
   } catch (error) {
     addLog(`导入配置文件失败：${String(error)}`)
@@ -904,34 +942,34 @@ const refreshModelFields = async () => {
 
 const loadState = async () => {
   try {
-    const [settingsData, mappingsData] = await Promise.all([
-      plugin.loadData(SETTINGS_STORAGE_KEY) as Promise<AnkiLinkerSettings | null>,
-      plugin.loadData(MAPPINGS_STORAGE_KEY) as Promise<AnkiLinkerMapping[] | null>,
-    ])
+    const state = await loadPersistedState(plugin)
 
-    if (settingsData) {
+    if (state.settings) {
       Object.assign(settings, {
         ...settings,
-        ...settingsData,
-        pathDeckRules: settingsData.pathDeckRules || [],
+        ...state.settings,
+        pathDeckRules: state.settings.pathDeckRules || [],
       })
     }
 
-    if (Array.isArray(mappingsData)) {
-      mappings.value = mappingsData
-    }
+    mappings.value = state.mappings
 
     addLog('已加载本地配置与映射数据')
+    if (state.migrationMessage) {
+      addLog(state.migrationMessage)
+    }
     syncRuleSearchStates()
   } catch (error) {
     addLog(`加载本地数据失败：${String(error)}`)
   }
 }
 
+
 const saveSettings = async () => {
-  await persistState()
+  await persistSettings()
   addLog(`配置已保存：默认卡组 ${settings.deckName}；问答 ${settings.qaNoteType}[${settings.qaFrontField},${settings.qaBackField}]；填空 ${settings.clozeNoteType}[${settings.clozeTextField},${settings.clozeExtraField}]；路径规则 ${settings.pathDeckRules.length} 条`)
 }
+
 
 const closePanel = () => {
   hidePanel()
@@ -988,8 +1026,8 @@ const refreshRemoteMeta = async () => {
       settings.clozeNoteType = models.includes('Cloze') ? 'Cloze' : noteTypeOptions.value[0].value
     }
 
-    await refreshModelFields()
-    await persistState()
+        await refreshModelFields()
+    await persistSettings()
     addLog(`已读取本地 Anki 元数据：${decks.length} 个卡组，${models.length} 个笔记类型`)
   } catch (error) {
     addLog(`刷新卡组/模型失败：${String(error)}`)
@@ -1021,9 +1059,9 @@ const syncToAnki = async () => {
     previewResult.value = result.preview
     syncStatus.value = 'done'
     syncPercent.value = 100
-    await refreshDeletionDiagnostics()
+        await refreshDeletionDiagnostics()
     showPreviewDetails.value = true
-    await persistState()
+    await persistMappings()
     addLog(`同步完成：新增 ${result.preview.summary.added}，更新 ${result.preview.summary.updated}，删除 ${result.preview.summary.deleted}`)
     addLog('若需同步到你的远端服务器，请回到 Anki 桌面端执行正常同步。')
   } catch (error) {
@@ -1035,6 +1073,11 @@ const syncToAnki = async () => {
 
 watch(() => settings.qaNoteType, async () => { await refreshModelFields() })
 watch(() => settings.clozeNoteType, async () => { await refreshModelFields() })
+watch(showPathRules, async (visible) => {
+  if (visible) {
+    await ensurePathOptionsLoaded()
+  }
+})
 
 onMounted(async () => {
   window[PLUGIN_RUNTIME_KEY] = { closePanel }
@@ -1043,7 +1086,6 @@ onMounted(async () => {
   await refreshCardStats()
   await refreshDeletionDiagnostics()
   await refreshRemoteMeta()
-  await refreshPathOptions()
 })
 
 onUnmounted(() => {
